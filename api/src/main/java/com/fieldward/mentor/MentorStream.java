@@ -34,9 +34,9 @@ class MentorStream {
 
     SseEmitter open(StoredTurn turn) throws IOException {
         var emitter = new SseEmitter(MentorTurns.STREAM_TIMEOUT_MS);
-        send(emitter, "turn", turn.view());
+        send(emitter, "turn", turns.view(turn));
         if (turn.status() == Status.COMPLETED) {
-            send(emitter, "done", turn.view());
+            send(emitter, "done", turns.view(turn));
             emitter.complete();
             return emitter;
         }
@@ -86,7 +86,8 @@ class MentorStream {
     private void generate(SseEmitter emitter, StoredTurn turn, AtomicBoolean finished) {
         var reply = new StringBuilder();
         try {
-            model.stream(turns.context(turn), text -> {
+            var context = turns.context(turn);
+            model.stream(context.messages(), text -> {
                 if (finished.get()) throw new IOException("Client disconnected");
                 if (reply.length() + text.length() > MAX_REPLY_LENGTH || text.indexOf(0) >= 0) {
                     throw new IOException("Mentor response exceeded limits");
@@ -95,17 +96,17 @@ class MentorStream {
                 send(emitter, "delta", new Delta(text));
             });
             if (finished.get()) return;
-            String answer = reply.toString().strip();
+            String answer = turns.verifyCitations(reply.toString(), context.sources());
             if (answer.isEmpty()) throw new IOException("Mentor response was empty");
-            var persisted = turns.complete(turn, answer);
+            var persisted = turns.complete(turn, answer, context.sources());
             if (persisted == null) throw new IOException("Mentor generation lease expired");
-            if (finished.compareAndSet(false, true)) send(emitter, "done", persisted.view());
+            if (finished.compareAndSet(false, true)) send(emitter, "done", turns.view(persisted));
         } catch (Exception error) {
             if (finished.compareAndSet(false, true)) {
                 log.warn("Mentor turn {} interrupted ({})", turn.id(), error.getClass().getSimpleName());
                 turns.interrupt(turn);
                 try {
-                    send(emitter, "interrupted", turn.interruptedView());
+                    send(emitter, "interrupted", turns.interruptedView(turn));
                 } catch (IOException | IllegalStateException socketClosed) {
                     // The persisted state is available on the next history request.
                 }

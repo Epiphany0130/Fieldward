@@ -22,7 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-record ResumeUpload(String name, String contentType, String sha256, String text, byte[] bytes) {
+public record ResumeUpload(String name, String contentType, String sha256, String text, byte[] bytes) {
     private static final int MAX_FILE_BYTES = 5 * 1024 * 1024;
     private static final int MAX_TEXT_LENGTH = 30_000;
     private static final String DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -32,7 +32,7 @@ record ResumeUpload(String name, String contentType, String sha256, String text,
         ZipSecureFile.setMaxFileCount(256);
     }
 
-    static ResumeUpload read(MultipartFile file) {
+    public static ResumeUpload read(MultipartFile file) {
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择有内容的简历文件");
         }

@@ -84,8 +84,12 @@ onBeforeUnmount(() => { requestId++; printMargins?.remove() })
       </header>
       <div class="original-text">
         <h3>正文预览</h3>
+        <p v-if="resume.upload.ocrStatus === 'READY'">以下是扫描件识别文本，可下载原件核对。</p>
         <p v-if="resume.upload.text" class="original-extracted">{{ resume.upload.text }}</p>
-        <p v-else>文件中没有可提取的文字。下载原件即可查看完整内容和版式。</p>
+        <p v-else-if="resume.upload.ocrStatus && ['PENDING', 'PROCESSING', 'RETRY'].includes(resume.upload.ocrStatus)">
+          扫描件等待识别。可以先下载原件查看。
+        </p>
+        <p v-else>文件中没有可用的正文。下载原件即可查看完整内容和版式。</p>
       </div>
     </section>
     <div v-else-if="resume?.content" class="final-paper">

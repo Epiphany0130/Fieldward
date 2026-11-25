@@ -15,6 +15,7 @@ export const router = createRouter({
     { path: '/resume/upload', name: 'resume-upload', component: () => import('./views/ResumeUploadView.vue'), meta: { title: '上传简历', role: 'STUDENT' } },
     { path: '/resume/final', name: 'resume-final', component: () => import('./views/ResumeFinalView.vue'), meta: { title: '简历成稿', role: 'STUDENT' } },
     { path: '/workspace', name: 'workspace', component: () => import('./views/WorkspaceView.vue'), meta: { title: '学生工作台', role: 'STUDENT' } },
+    { path: '/workspace/memory', name: 'mentor-memory', component: () => import('./views/MentorMemoryView.vue'), meta: { title: 'Mentor 记忆库', role: 'STUDENT' } },
     { path: '/admin', redirect: { name: 'admin-users' } },
     { path: '/admin/users', name: 'admin-users', component: () => import('./views/AdminUsersView.vue'), meta: { title: '用户管理中心', role: 'ADMIN' } },
     { path: '/:pathMatch(.*)*', redirect: { name: 'login' } },

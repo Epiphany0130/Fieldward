@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 
 import { ApiError, api, errorMessage } from '../api'
 import { streamMentor, type MentorHistory, type MentorTurn, type StudentMessage } from '../mentor'
 
-const props = defineProps<{ accountId: string }>()
+const props = defineProps<{ accountId: string; sideId: string | null }>()
 const emit = defineEmits<{ expired: [] }>()
 const turns = ref<MentorTurn[]>([])
 const loading = ref(true)
@@ -65,6 +65,7 @@ async function syncHistory(watch = active.value?.requestId, before?: string) {
   const oldHeight = thread.value?.scrollHeight ?? 0
   try {
     const query = new URLSearchParams()
+    if (props.sideId) query.set('side', props.sideId)
     if (watch) query.set('watch', watch)
     if (before) query.set('before', before)
     const snapshot = await api<MentorHistory>(`/mentor/turns?${query}`)
@@ -108,7 +109,7 @@ async function send(input: StudentMessage) {
   void scrollToEnd()
 
   try {
-    await streamMentor(props.accountId, input, controller.signal, (event) => {
+    await streamMentor(props.accountId, props.sideId, input, controller.signal, (event) => {
       if (unmounted) return
       const shouldScroll = nearEnd()
       if (event.name === 'delta') {
@@ -162,6 +163,11 @@ function reloadHistory() {
   void syncHistory()
 }
 
+function startResumeReview() {
+  if (!ready.value || !available.value || busy.value || pending.value || syncing.value) return
+  void send({ requestId: crypto.randomUUID(), content: '请复盘我当前的正式简历。先引用与求职最相关的一段真实经历，再问我一个关于实际分工的问题。如果资料不足，请说明。' })
+}
+
 onMounted(() => void syncHistory())
 onBeforeUnmount(() => {
   unmounted = true
@@ -180,7 +186,10 @@ onBeforeUnmount(() => {
       </button>
       <div v-if="ready && !turns.length && !pending" class="thread-empty">
         <h3>想从哪里开始？</h3>
-        <p>可以聊聊你想找的实习、手上的课程项目，或现在最拿不准的一件事。</p>
+        <p v-if="sideId">在这里深入讨论一个话题。明确的求职目标、经历和偏好会沉淀到共享记忆。</p>
+        <template v-else>
+          <p>可以从正式简历开始复盘，也可以先聊想找的实习。</p>
+        </template>
       </div>
       <ol v-if="turns.length || pending" class="turns">
         <li v-for="turn in turns" :key="turn.requestId" class="turn">
@@ -191,6 +200,17 @@ onBeforeUnmount(() => {
           <article v-if="turn.status === 'COMPLETED'" class="bubble mentor-bubble">
             <header><strong>Mentor</strong></header>
             <p>{{ turn.mentorReply }}</p>
+            <details v-if="turn.sources?.length" class="mentor-sources">
+              <summary>查看本轮资料来源（{{ turn.sources.length }}）</summary>
+              <ol>
+                <li v-for="source in turn.sources" :key="source.id">
+                  <strong>[{{ source.id }}]</strong>
+                  <a v-if="source.href" :href="source.href">{{ source.label }}</a>
+                  <span v-else>{{ source.label }}</span>
+                  <p>{{ source.excerpt }}</p>
+                </li>
+              </ol>
+            </details>
           </article>
           <article v-else-if="turn.status === 'STREAMING'" class="bubble mentor-bubble">
             <header><strong>Mentor</strong><span>正在回复</span></header>
@@ -226,6 +246,8 @@ onBeforeUnmount(() => {
                   :disabled="!ready || !available || Boolean(pending)" placeholder="例如：我想准备 Java 后端实习，应该从哪开始？" />
       </label>
       <div class="composer-actions">
+        <button v-if="!sideId" type="button" class="button button-quiet" :disabled="!ready || !available || busy || syncing || Boolean(pending)"
+                @click="startResumeReview">复盘当前简历</button>
         <span class="muted" role="status">{{ busy ? 'Mentor 正在处理本轮对话' : '' }}</span>
         <button v-if="aborter" type="button" class="button button-quiet" @click="aborter.abort()">停止接收</button>
         <button v-else type="submit" class="button button-primary" :disabled="!canSend">发送消息</button>
@@ -251,14 +273,19 @@ onBeforeUnmount(() => {
 .bubble p { white-space: pre-wrap; line-height: 1.65; }
 .user-bubble { justify-self: end; background: #e6eee3; border: 1px solid #d6e1d4; }
 .mentor-bubble { justify-self: start; background: #f6f7f2; border: 1px solid #dfe6dc; }
+.mentor-sources { margin-top: .65rem; padding-top: .55rem; border-top: 1px solid var(--outline); font-size: .85rem; }
+.mentor-sources summary { cursor: pointer; color: var(--primary); }
+.mentor-sources ol { display: grid; gap: .55rem; padding-left: 1.3rem; margin: .65rem 0 0; }
+.mentor-sources li strong { margin-right: .4rem; }
+.mentor-sources p { margin-top: .15rem; color: var(--muted); }
 .turn-feedback { display: flex; justify-content: start; align-items: center; flex-wrap: wrap; gap: .4rem; color: var(--muted); font-size: .87rem; }
 .chat-notice { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin: 0 .9rem .7rem; }
 .chat-notice .notice { flex: 1 1 12rem; }
 .setup-notice { background: #eff1e7; color: var(--muted); }
 .composer { display: grid; gap: .55rem; border-top: 1px solid #dde6dc; padding: .8rem .9rem; }
 .composer textarea { resize: vertical; line-height: 1.55; }
-.composer-actions { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.composer-actions span { font-size: .8rem; }
+.composer-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.composer-actions span { margin-right: auto; font-size: .8rem; }
 @media (max-width: 680px) {
   .mentor-thread { max-height: 51dvh; }
 }

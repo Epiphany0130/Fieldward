@@ -7,6 +7,57 @@ export interface MentorTurn {
   mentorReply: string | null
   status: 'STREAMING' | 'COMPLETED' | 'INTERRUPTED'
   createdAt: string
+  sources: MentorSource[]
+}
+
+export interface MentorSource {
+  id: string
+  label: string
+  href: string | null
+  excerpt: string
+}
+
+export interface SideChat {
+  id: string
+  title: string
+}
+
+export interface MemoryNote {
+  id: string
+  category: 'GOAL' | 'EXPERIENCE' | 'PREFERENCE' | 'NOTE'
+  body: string
+  createdAt: string
+  sourceTurnId: string | null
+  sideId: string | null
+  sideTitle: string | null
+}
+
+export interface MemoryResume {
+  version: number
+  submittedAt: string
+  fileName: string | null
+  readable: boolean
+  ocrStatus: 'PENDING' | 'PROCESSING' | 'RETRY' | 'READY' | 'EMPTY' | 'FAILED' | null
+}
+
+export interface MemoryFile {
+  id: string
+  name: string
+  createdAt: string
+  readable: boolean
+  ocrStatus: MemoryResume['ocrStatus']
+}
+
+export interface MemoryPage<T> {
+  items: T[]
+  nextBefore: string | null
+}
+
+export interface MentorLibrary {
+  accountId: string
+  notes: MemoryPage<MemoryNote>
+  resumes: MemoryPage<MemoryResume>
+  files: MemoryPage<MemoryFile>
 }
 
 export interface MentorHistory {
@@ -42,9 +93,10 @@ function readEvent(frame: string): MentorEvent | null {
   return null
 }
 
-export async function streamMentor(accountId: string, message: StudentMessage, signal: AbortSignal,
+export async function streamMentor(accountId: string, sideId: string | null, message: StudentMessage, signal: AbortSignal,
                                    receive: (event: MentorEvent) => void) {
-  const response = await requestApi('/mentor/turns', 'POST', { accountId, ...message },
+  const path = sideId ? `/mentor/turns?side=${encodeURIComponent(sideId)}` : '/mentor/turns'
+  const response = await requestApi(path, 'POST', { accountId, ...message },
     'text/event-stream, application/problem+json', signal)
   if (!response.body || !response.headers.get('Content-Type')?.includes('text/event-stream')) {
     throw new ApiError(0, '未能连接 Mentor，请稍后重试。')

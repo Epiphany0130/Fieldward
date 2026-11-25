@@ -47,6 +47,12 @@
 
 个人信息可补充求职意向、联系方式和照片，教育支持多段记录。经历与技能条目可排序，选填栏目可重命名和隐藏。三种简历版式支持字体、主题色、页眉对齐及 A4 边距设置。提交后点击「查看成稿」可浏览已提交版本，并通过浏览器打印或存为 PDF。
 
-## Mentor 主对话
+## Mentor 对话与记忆
 
 在项目根目录的 `.env` 设置按量付费的 `MIMO_API_KEY`，重启 API 后即可与 Mentor 对话。默认模型是 `mimo-v2.6-pro`，使用小米官方按量 `https://api.xiaomimimo.com/v1/chat/completions`。项目配置可用 `FIELDWARD_MENTOR_ENDPOINT` 与 `FIELDWARD_MENTOR_MODEL` 覆盖。每轮先保存学生消息，再通过 SSE 返回增量内容。完整回复提交后才进入历史。打开工作台可以恢复历史，失败时可重试同一条学生消息。
+
+在工作台点击「复盘当前简历」即可让 Mentor 依据正式版本提问，也可以直接指定版本号或文件名。可按话题创建旁聊，主对话和旁聊各自保留记录、共用记忆和资料。Mentor 会自动保存符合提取规则的学生原话，例如明确说出的目标、参与经历、偏好或「请记住」指令。学生也可以在 [Mentor 记忆库](http://127.0.0.1:5178/workspace/memory) 手动保存笔记、翻看所有正式简历版本与原件、添加独立的 PDF 或 DOCX 求职资料。回复下方的「查看本轮资料来源」可核对本轮检索的版本、笔记和对话摘录。
+
+对话保存在 PostgreSQL。模型请求使用当前线程近期消息及检索出的相关旧对话、简历和文件。检索采用中文双字词和英文词索引。正式简历发给模型前去掉排版和照片，并遮盖常见联系方式。Mentor 会标注扫描件识别文本和缺失资料。
+
+要启用扫描 PDF 的本地识别，先安装带 `chi_sim` 和 `eng` 语言包的 Tesseract，例如 macOS 上的 `brew install tesseract-lang`，再将 `FIELDWARD_OCR_ENABLED=true` 写入 `.env` 并重启 API。识别任务以账号和文件摘要去重，处理没有文本层的 PDF 的前 10 页。原件始终可以下载核对。[Tesseract 安装说明](https://tesseract-ocr.github.io/tessdoc/Installation.html)

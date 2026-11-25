@@ -38,17 +38,19 @@ class MentorChatController {
     @GetMapping
     MentorTurns.History history(@AuthenticationPrincipal AccountPrincipal student,
                                @RequestParam(required = false) @Positive Long before,
+                               @RequestParam(required = false) @Positive Long side,
                                @RequestParam(required = false) UUID watch) {
-        return turns.history(student.accountId(), before, watch == null ? null : watch.toString(), model.available());
+        return turns.history(student.accountId(), side, before, watch == null ? null : watch.toString(), model.available());
     }
 
     @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     ResponseEntity<SseEmitter> send(@AuthenticationPrincipal AccountPrincipal student,
+                                    @RequestParam(required = false) @Positive Long side,
                                     @RequestBody @Valid StudentMessage message) throws IOException {
         if (!Long.toString(student.accountId()).equals(message.accountId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "当前登录账号已变更，请重新登录后再发送");
         }
-        var turn = turns.claim(student.accountId(), message.requestId().toString(), message.content(), model.available());
+        var turn = turns.claim(student.accountId(), side, message.requestId().toString(), message.content(), model.available());
         return ResponseEntity.ok()
                 .header("Cache-Control", "no-store")
                 .header("X-Accel-Buffering", "no")

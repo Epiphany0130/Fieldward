@@ -46,3 +46,7 @@ fieldward:
     endpoint: ${FIELDWARD_MENTOR_ENDPOINT:https://api.xiaomimimo.com/v1/chat/completions}
     api-key: ${MIMO_API_KEY:}
     model: ${FIELDWARD_MENTOR_MODEL:mimo-v2.6-pro}
+    ocr:
+      enabled: ${FIELDWARD_OCR_ENABLED:false}
+      command: ${FIELDWARD_OCR_COMMAND:tesseract}
+      languages: ${FIELDWARD_OCR_LANGUAGES:chi_sim+eng}

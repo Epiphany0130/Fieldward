@@ -123,7 +123,7 @@ export interface ResumeFinal {
   version: number
   submittedAt: string
   content: ResumeContent | null
-  upload: { name: string; contentType: string; sizeBytes: number; text: string } | null
+  upload: { name: string; contentType: string; sizeBytes: number; text: string; ocrStatus: string | null } | null
 }
 
 export function emptyProfile(): Profile {

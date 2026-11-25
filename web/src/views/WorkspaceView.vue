@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError, api, errorMessage } from '../api'
 import { account, forgetSession } from '../session'
 import MentorChat from '../components/MentorChat.vue'
+import type { SideChat } from '../mentor'
 
 interface Workspace {
   conversationId: string
@@ -13,9 +14,15 @@ interface Workspace {
 }
 
 const router = useRouter()
+const route = useRoute()
 const workspace = ref<Workspace>()
 const loading = ref(true)
 const message = ref('')
+const sides = ref<SideChat[]>([])
+const sideTitle = ref('')
+const sideError = ref('')
+const creatingSide = ref(false)
+const selectedSide = computed(() => sides.value.find(({ id }) => id === route.query.side))
 const dateFormat = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'long' })
 let active = true
 
@@ -36,6 +43,10 @@ async function loadWorkspace() {
       return
     }
     workspace.value = state.workspace
+    const channels = await api<{ accountId: string; sides: SideChat[] }>('/mentor/side-chats')
+    if (!active) return
+    if (channels.accountId !== account.value?.id) throw new ApiError(403, '登录账号已变更，请刷新页面。')
+    sides.value = channels.sides
   } catch (error) {
     if (!active) return
     if (error instanceof ApiError && error.status === 401) {
@@ -45,6 +56,24 @@ async function loadWorkspace() {
     }
   } finally {
     if (active) loading.value = false
+  }
+}
+
+async function createSide() {
+  if (!account.value || creatingSide.value || !sideTitle.value.trim()) return
+  creatingSide.value = true
+  sideError.value = ''
+  try {
+    const result = await api<SideChat>('/mentor/side-chats', 'POST', { accountId: account.value.id, title: sideTitle.value.trim() })
+    if (!active) return
+    if (!sides.value.some(({ id }) => id === result.id)) sides.value.unshift(result)
+    sideTitle.value = ''
+    await router.push({ name: 'workspace', query: { side: result.id } })
+  } catch (error) {
+    if (active && error instanceof ApiError && error.status === 401) await expireSession()
+    else if (active) sideError.value = errorMessage(error)
+  } finally {
+    if (active) creatingSide.value = false
   }
 }
 
@@ -67,11 +96,15 @@ onBeforeUnmount(() => { active = false })
           <header class="conversation-header">
             <span class="mentor-mark" aria-hidden="true">M</span>
             <div>
-              <h2 id="conversation-title">Mentor 主对话</h2>
-              <p>创建于 <time :datetime="workspace.createdAt">{{ dateFormat.format(new Date(workspace.createdAt)) }}</time></p>
+              <h2 id="conversation-title">{{ selectedSide ? selectedSide.title : 'Mentor 主对话' }}</h2>
+              <p v-if="selectedSide">旁聊 · 与主对话共享记忆</p>
+              <p v-else>创建于 <time :datetime="workspace.createdAt">{{ dateFormat.format(new Date(workspace.createdAt)) }}</time></p>
             </div>
           </header>
-          <MentorChat v-if="account" :key="workspace.conversationId" :account-id="account.id" @expired="expireSession" />
+          <KeepAlive :max="8">
+            <MentorChat v-if="account" :key="`${workspace.conversationId}:${selectedSide?.id ?? 'main'}`"
+                        :account-id="account.id" :side-id="selectedSide?.id ?? null" @expired="expireSession" />
+          </KeepAlive>
         </section>
 
         <aside class="surface workspace-resume" aria-labelledby="workspace-resume-title">
@@ -86,7 +119,22 @@ onBeforeUnmount(() => { active = false })
                         :to="{ name: 'resume-upload', query: { from: 'workspace' } }">上传新版本</RouterLink>
             <RouterLink class="button button-primary"
                         :to="{ name: 'resume-final', query: { version: String(workspace.latestResumeVersion) } }">查看成稿</RouterLink>
+            <RouterLink class="button button-quiet" :to="{ name: 'mentor-memory' }">打开 Mentor 记忆库</RouterLink>
           </div>
+          <section class="side-chats" aria-labelledby="side-heading">
+            <h2 id="side-heading">对话</h2>
+            <nav aria-label="切换 Mentor 对话">
+              <RouterLink :to="{ name: 'workspace' }" :aria-current="selectedSide ? undefined : 'page'">主对话</RouterLink>
+              <RouterLink v-for="side in sides" :key="side.id" :to="{ name: 'workspace', query: { side: side.id } }"
+                          :aria-current="selectedSide?.id === side.id ? 'page' : undefined">{{ side.title }}</RouterLink>
+            </nav>
+            <form class="side-form" @submit.prevent="createSide">
+              <label for="side-title">新建旁聊</label>
+              <input id="side-title" v-model="sideTitle" maxlength="80" placeholder="例如：复盘数据库项目">
+              <button class="button button-quiet" :disabled="creatingSide || !sideTitle.trim()" type="submit">创建旁聊</button>
+              <p v-if="sideError" class="notice notice-error" role="alert">{{ sideError }}</p>
+            </form>
+          </section>
         </aside>
       </div>
     </template>
@@ -109,6 +157,14 @@ onBeforeUnmount(() => { active = false })
 .workspace-resume-name { overflow-wrap: anywhere; }
 .workspace-links { display: flex; flex-wrap: wrap; gap: .5rem; }
 .workspace-links .button { display: inline-flex; align-items: center; text-decoration: none; }
+.side-chats { display: grid; gap: .65rem; border-top: 1px solid var(--outline); padding-top: .9rem; }
+.side-chats nav { display: grid; gap: .25rem; max-height: 13rem; overflow: auto; }
+.side-chats nav a { display: block; padding: .55rem .65rem; border-radius: .4rem; text-decoration: none; overflow-wrap: anywhere; }
+.side-chats nav a[aria-current="page"] { font-weight: 700; background: #e6eee3; }
+.side-chats nav a:hover { background: #edf1e8; }
+.side-form { display: grid; gap: .45rem; }
+.side-form label { font-size: .85rem; font-weight: 650; }
+.side-form input { min-width: 0; width: 100%; padding: .55rem; border: 1px solid var(--outline); border-radius: .45rem; }
 .workspace-feedback { padding: 1.1rem; }
 .workspace-feedback .button { margin-top: .7rem; }
 
