@@ -9,17 +9,21 @@ record ResumeDraftContent(
         @Valid Profile profile,
         @NotNull @Valid Education education,
         @NotNull @Size(max = 30) List<@NotNull @Valid Experience> experiences,
-        @NotNull @Size(max = 30) List<@NotNull @Valid Skill> skills
+        @NotNull @Size(max = 30) List<@NotNull @Valid Skill> skills,
+        @Valid Layout layout
 ) {
     ResumeDraftContent {
         // Drafts saved before profile fields were introduced have no profile key.
         if (profile == null) {
             profile = new Profile("", "", "");
         }
+        if (layout == null) {
+            layout = new Layout(Theme.RULED, Density.STANDARD, List.of(Section.COURSEWORK, Section.SKILLS));
+        }
     }
 
     static ResumeDraftContent empty() {
-        return new ResumeDraftContent(null, new Education("", "", "", ""), List.of(), List.of());
+        return new ResumeDraftContent(null, new Education("", "", "", ""), List.of(), List.of(), null);
     }
 
     record Profile(
@@ -38,11 +42,30 @@ record ResumeDraftContent(
     record Experience(
             @NotNull ExperienceType type,
             @NotNull @Size(max = 120) String title,
+            @Size(max = 80) String role,
+            @Size(max = 60) String period,
             @NotNull @Size(max = 1000) String context,
             @NotNull @Size(max = 2000) String contribution
-    ) {}
+    ) {
+        Experience {
+            role = role == null ? "" : role;
+            period = period == null ? "" : period;
+        }
+    }
 
     record Skill(@NotNull @Size(max = 80) String name, @NotNull Proficiency proficiency) {}
+
+    record Layout(
+            @NotNull Theme theme,
+            @NotNull Density density,
+            @NotNull @Size(max = 5) List<@NotNull Section> sections
+    ) {}
+
+    enum Theme { RULED, EDITORIAL }
+
+    enum Density { COMPACT, STANDARD, RELAXED }
+
+    enum Section { COURSEWORK, PROJECT, INTERNSHIP, ACTIVITY, SKILLS }
 
     enum ExperienceType {
         COURSEWORK, PROJECT, INTERNSHIP, ACTIVITY

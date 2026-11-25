@@ -1,6 +1,23 @@
 import { ref } from 'vue'
 
 export type ExperienceType = 'COURSEWORK' | 'PROJECT' | 'INTERNSHIP' | 'ACTIVITY'
+export type ResumeSection = ExperienceType | 'SKILLS'
+export type ResumePanel = 'PROFILE' | 'EDUCATION' | ResumeSection
+
+export const resumeSections: { id: ResumeSection; label: string; icon: string }[] = [
+  { id: 'COURSEWORK', label: '课程与作业', icon: '课' },
+  { id: 'PROJECT', label: '项目经历', icon: '项' },
+  { id: 'INTERNSHIP', label: '实习经历', icon: '实' },
+  { id: 'ACTIVITY', label: '校园活动', icon: '校' },
+  { id: 'SKILLS', label: '专业技能', icon: '技' },
+]
+
+export interface ResumeLayout {
+  theme: 'RULED' | 'EDITORIAL'
+  density: 'COMPACT' | 'STANDARD' | 'RELAXED'
+  sections: ResumeSection[]
+}
+
 export type Proficiency = 'EXPOSURE' | 'GUIDED' | 'INDEPENDENT'
 
 export interface Profile {
@@ -19,6 +36,8 @@ export interface Education {
 export interface Experience {
   type: ExperienceType
   title: string
+  role: string
+  period: string
   context: string
   contribution: string
 }
@@ -33,6 +52,7 @@ export interface ResumeContent {
   education: Education
   experiences: Experience[]
   skills: Skill[]
+  layout: ResumeLayout
 }
 
 export interface ResumeSubmission {
