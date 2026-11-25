@@ -1,0 +1,23 @@
+server:
+  address: 127.0.0.1
+  port: ${FIELDWARD_API_PORT:18080}
+spring:
+  application:
+    name: fieldward
+  config:
+    import: 'optional:file:./.env[.properties],optional:file:../.env[.properties]'
+  datasource:
+    url: ${FIELDWARD_DB_URL}
+    username: ${FIELDWARD_DB_USER}
+    password: ${FIELDWARD_DB_PASSWORD}
+    hikari:
+      connection-timeout: 5000
+  mvc:
+    problemdetails:
+      enabled: true
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+springdoc:
+  api-docs:
+    path: /api/openapi

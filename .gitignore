@@ -1,0 +1,10 @@
+.DS_Store
+.idea/
+*.iml
+.env
+.env.local
+.env.*.local
+/api/target/
+/web/node_modules/
+/web/dist/
+/web/*.tsbuildinfo
