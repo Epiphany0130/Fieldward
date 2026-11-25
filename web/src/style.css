@@ -68,8 +68,6 @@ button, input, select, textarea { font: inherit; }
 .page { width: min(100% - 2rem, 68rem); margin: 3.5rem auto; }
 .page h1 { margin-bottom: 1.5rem; }
 .surface { background: var(--surface); border: 1px solid var(--outline); border-radius: 1rem; }
-.workspace-card { max-width: 36rem; padding: 1.5rem; overflow-wrap: anywhere; }
-.workspace-card p { margin-top: .75rem; color: var(--muted); }
 
 .auth-layout {
   width: min(100% - 2rem, 66rem);

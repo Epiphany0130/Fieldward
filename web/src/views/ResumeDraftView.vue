@@ -236,10 +236,12 @@ async function writeResume(nextAction: 'save' | 'submit') {
       savedContent.value = snapshot
     }
     if (nextAction === 'submit') {
-      base.value.submission = await api<ResumeSubmission>('/resume/submit', 'POST', {
+      const submission = await api<ResumeSubmission>('/resume/submit', 'POST', {
         accountId: base.value.accountId,
         revision: base.value.revision,
       })
+      base.value.submission = submission
+      if (submission.version === 1) await router.replace({ name: 'workspace' })
     }
   } catch (error) {
     conflict.value = error instanceof ApiError && error.status === 409
@@ -277,7 +279,7 @@ onBeforeUnmount(() => {
   <main id="main" tabindex="-1" class="resume-page">
     <header class="resume-header surface">
       <div class="resume-heading">
-        <RouterLink class="resume-back" :to="{ name: 'workspace' }">学生工作台</RouterLink>
+        <RouterLink v-if="base?.submission" class="resume-back" :to="{ name: 'workspace' }">学生工作台</RouterLink>
         <h1>简历制作</h1>
         <p>填写姓名和学校即可提交，其他栏目可以按需添加。</p>
       </div>
@@ -288,7 +290,7 @@ onBeforeUnmount(() => {
         <RouterLink v-if="base.submission" class="button button-quiet final-link"
                     :to="{ name: 'resume-final' }">查看成稿</RouterLink>
         <button class="button button-primary" type="button" :disabled="submitted || busy || conflict"
-                @click="writeResume('submit')">{{ submitted ? '已提交' : '提交简历' }}</button>
+                @click="writeResume('submit')">{{ submitted ? '已提交' : base.submission ? '提交新版本' : '创建简历' }}</button>
       </div>
     </header>
 

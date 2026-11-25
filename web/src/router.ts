@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { account, restoreSession } from './session'
 
 export function accountHome() {
-  return { name: account.value?.role === 'ADMIN' ? 'admin-users' : 'resume-draft' }
+  return { name: account.value?.role === 'ADMIN' ? 'admin-users' : 'workspace' }
 }
 
 export const router = createRouter({

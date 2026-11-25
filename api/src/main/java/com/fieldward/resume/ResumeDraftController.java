@@ -1,6 +1,7 @@
 package com.fieldward.resume;
 
 import com.fieldward.account.AccountPrincipal;
+import com.fieldward.mentor.MentorConversationMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -25,11 +26,14 @@ import tools.jackson.databind.json.JsonMapper;
 class ResumeDraftController {
     private final ResumeDraftMapper drafts;
     private final ResumeVersionMapper versions;
+    private final MentorConversationMapper conversations;
     private final JsonMapper json;
 
-    ResumeDraftController(ResumeDraftMapper drafts, ResumeVersionMapper versions, JsonMapper json) {
+    ResumeDraftController(ResumeDraftMapper drafts, ResumeVersionMapper versions,
+                          MentorConversationMapper conversations, JsonMapper json) {
         this.drafts = drafts;
         this.versions = versions;
+        this.conversations = conversations;
         this.json = json;
     }
 
@@ -81,7 +85,11 @@ class ResumeDraftController {
         if (content.profile().name().isBlank() || !content.hasSchool()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写姓名和学校");
         }
-        return versions.insert(accountId, draft.revision(), draft.content());
+        var submission = versions.insert(accountId, draft.revision(), draft.content());
+        if (submission.version() == 1) {
+            conversations.createMain(accountId, submission.version());
+        }
+        return submission;
     }
 
     @GetMapping("/final")
