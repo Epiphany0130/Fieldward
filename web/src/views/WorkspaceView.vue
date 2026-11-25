@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { ApiError, api, errorMessage } from '../api'
 import { account, forgetSession } from '../session'
+import MentorChat from '../components/MentorChat.vue'
 
 interface Workspace {
   conversationId: string
@@ -17,6 +18,11 @@ const loading = ref(true)
 const message = ref('')
 const dateFormat = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'long' })
 let active = true
+
+async function expireSession() {
+  forgetSession()
+  await router.replace({ name: 'login' })
+}
 
 async function loadWorkspace() {
   loading.value = true
@@ -33,8 +39,7 @@ async function loadWorkspace() {
   } catch (error) {
     if (!active) return
     if (error instanceof ApiError && error.status === 401) {
-      forgetSession()
-      await router.replace({ name: 'login' })
+      await expireSession()
     } else {
       message.value = errorMessage(error)
     }
@@ -66,10 +71,7 @@ onBeforeUnmount(() => { active = false })
               <p>创建于 <time :datetime="workspace.createdAt">{{ dateFormat.format(new Date(workspace.createdAt)) }}</time></p>
             </div>
           </header>
-          <div class="conversation-body">
-            <p class="conversation-greeting">你好，{{ workspace.resumeName?.trim() || account?.displayName }}。</p>
-            <p>你的简历已关联到这段主对话。</p>
-          </div>
+          <MentorChat v-if="account" :key="workspace.conversationId" :account-id="account.id" @expired="expireSession" />
         </section>
 
         <aside class="surface workspace-resume" aria-labelledby="workspace-resume-title">
@@ -95,13 +97,11 @@ onBeforeUnmount(() => { active = false })
 .conversation { min-width: 0; min-height: 21rem; }
 .conversation-header { display: flex; align-items: center; gap: .75rem; padding: 1rem; border-bottom: 1px solid #dde6dc; }
 .conversation-header h2, .workspace-resume h2 { font-size: 1.05rem; }
-.conversation-header p, .workspace-resume p, .conversation-body p + p { margin-top: .3rem; color: var(--muted); line-height: 1.55; }
+.conversation-header p, .workspace-resume p { margin-top: .3rem; color: var(--muted); line-height: 1.55; }
 .mentor-mark {
   display: grid; flex: none; place-items: center; width: 2.55rem; height: 2.55rem; border-radius: .6rem;
   background: var(--primary); color: #fff; font: 650 1.25rem/1 Georgia, serif;
 }
-.conversation-body { padding: clamp(1.25rem, 4vw, 2rem); overflow-wrap: anywhere; }
-.conversation-greeting { font-size: 1.3rem; font-weight: 700; }
 .workspace-resume { display: grid; gap: 1rem; padding: 1rem; }
 .workspace-links { display: flex; flex-wrap: wrap; gap: .5rem; }
 .workspace-links .button { display: inline-flex; align-items: center; text-decoration: none; }

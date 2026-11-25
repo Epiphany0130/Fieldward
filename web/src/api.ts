@@ -25,7 +25,15 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, method = 'GET', data?: object): Promise<T> {
-  const headers = new Headers({ Accept: 'application/json' })
+  const response = await requestApi(path, method, data)
+  if (response.status === 204) return undefined as T
+  const body = await response.text()
+  return body ? JSON.parse(body) : undefined as T
+}
+
+export async function requestApi(path: string, method: string, data?: object,
+                                 accept = 'application/json', signal?: AbortSignal): Promise<Response> {
+  const headers = new Headers({ Accept: accept })
   if (method !== 'GET') {
     const csrf = await api<CsrfToken>('/auth/csrf')
     headers.set(csrf.headerName, csrf.token)
@@ -38,6 +46,7 @@ export async function api<T>(path: string, method = 'GET', data?: object): Promi
     body: data ? JSON.stringify(data) : undefined,
     credentials: 'same-origin',
     cache: 'no-store',
+    signal,
   })
 
   if (!response.ok) {
@@ -53,9 +62,7 @@ export async function api<T>(path: string, method = 'GET', data?: object): Promi
       : statusMessages[response.status] ?? '服务暂时不可用，请稍后重试。'
     throw new ApiError(response.status, message)
   }
-  if (response.status === 204) return undefined as T
-  const body = await response.text()
-  return body ? JSON.parse(body) : undefined as T
+  return response
 }
 
 export function errorMessage(error: unknown): string {

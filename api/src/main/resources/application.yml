@@ -37,3 +37,8 @@ fieldward:
   admin:
     email: ${FIELDWARD_ADMIN_EMAIL:}
     password: ${FIELDWARD_ADMIN_PASSWORD:}
+
+  mentor:
+    endpoint: ${FIELDWARD_MENTOR_ENDPOINT:https://api.xiaomimimo.com/v1/chat/completions}
+    api-key: ${MIMO_API_KEY:}
+    model: ${FIELDWARD_MENTOR_MODEL:mimo-v2.6-pro}
