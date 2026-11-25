@@ -79,15 +79,14 @@ const panelHeading = computed(() => optionalSection.value
 const busy = computed(() => Boolean(action.value) || loading.value)
 const fingerprint = computed(() => JSON.stringify(content.value))
 const dirty = computed(() => Boolean(base.value) && fingerprint.value !== savedContent.value)
-const submitted = computed(() => Boolean(base.value?.submission)
-  && base.value?.submission?.draftRevision === base.value?.revision && !dirty.value)
+const submitted = computed(() => Boolean(base.value?.submittedDraftVersion) && !dirty.value)
 const nameInvalid = computed(() => checkBasics.value && !profile.value.name.trim())
 const schoolInvalid = computed(() => checkBasics.value && !educationRows.value.some(({ value }) => value.school.trim()))
 const status = computed(() => {
   if (action.value === 'submit') return '正在提交…'
   if (action.value === 'save') return '正在保存…'
   if (dirty.value) return '有未保存的修改'
-  if (submitted.value) return `已提交第 ${base.value?.submission?.version} 版`
+  if (submitted.value) return `此草稿已提交为第 ${base.value?.submittedDraftVersion} 版`
   if (base.value?.updatedAt) return '草稿已保存'
   return '新简历'
 })
@@ -240,7 +239,10 @@ async function writeResume(nextAction: 'save' | 'submit') {
         accountId: base.value.accountId,
         revision: base.value.revision,
       })
-      base.value.submission = submission
+      base.value.submittedDraftVersion = submission.version
+      if (!base.value.submission || submission.version > base.value.submission.version) {
+        base.value.submission = submission
+      }
       if (submission.version === 1) await router.replace({ name: 'workspace' })
     }
   } catch (error) {
@@ -281,10 +283,11 @@ onBeforeUnmount(() => {
       <div class="resume-heading">
         <RouterLink v-if="base?.submission" class="resume-back" :to="{ name: 'workspace' }">学生工作台</RouterLink>
         <h1>简历制作</h1>
-        <p>填写姓名和学校即可提交，其他栏目可以按需添加。</p>
+        <p>填写姓名和学校即可提交，也可直接上传已有简历。</p>
       </div>
       <div v-if="base" class="resume-actions">
         <p role="status" class="resume-status" :data-dirty="dirty"><span aria-hidden="true"></span>{{ status }}</p>
+        <RouterLink class="button button-quiet final-link" :to="{ name: 'resume-upload' }">上传已有简历</RouterLink>
         <button class="button button-quiet" type="button" :disabled="!dirty || busy || conflict"
                 @click="writeResume('save')">保存草稿</button>
         <RouterLink v-if="base.submission" class="button button-quiet final-link"

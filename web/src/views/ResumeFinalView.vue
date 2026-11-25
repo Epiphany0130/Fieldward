@@ -31,6 +31,7 @@ async function loadVersion() {
     if (id !== requestId) return
     if (result.accountId !== account.value?.id) throw new ApiError(403, '登录账号已变更，请刷新页面。')
     resume.value = result
+    if (!result.content) return
     printMargins = document.createElement('style')
     const { topMargin, rightMargin, bottomMargin, leftMargin } = result.content.layout.appearance
     printMargins.textContent = `@page { size: A4; margin: ${topMargin}mm ${rightMargin}mm ${bottomMargin}mm ${leftMargin}mm; }`
@@ -60,7 +61,8 @@ onBeforeUnmount(() => { requestId++; printMargins?.remove() })
   <main id="main" tabindex="-1" class="final-page">
     <header class="surface final-header">
       <div>
-        <RouterLink :to="{ name: 'resume-draft' }">返回编辑</RouterLink>
+        <RouterLink v-if="resume?.upload" :to="{ name: 'workspace' }">返回工作台</RouterLink>
+        <RouterLink v-else :to="{ name: 'resume-draft' }">返回编辑</RouterLink>
         <h1>简历成稿</h1>
         <p v-if="resume">已提交 · 第 {{ resume.version }} 版</p>
       </div>
@@ -68,12 +70,25 @@ onBeforeUnmount(() => { requestId++; printMargins?.remove() })
         <RouterLink v-if="resume.version > 1" class="button button-quiet"
                     :to="{ name: 'resume-final', query: { version: String(resume.version - 1) } }">上一版</RouterLink>
         <RouterLink v-if="route.query.version" class="button button-quiet" :to="{ name: 'resume-final' }">最新版本</RouterLink>
-        <button class="button button-primary" type="button" @click="printDocument">打印 / 存为 PDF</button>
+        <a v-if="resume.upload" class="button button-primary"
+           :href="`/api/resume/final/original?version=${resume.version}`">下载原件</a>
+        <button v-else class="button button-primary" type="button" @click="printDocument">打印 / 存为 PDF</button>
       </nav>
     </header>
     <p v-if="loading" class="final-feedback" role="status">正在加载成稿…</p>
     <p v-else-if="message" class="notice notice-error final-feedback" role="alert">{{ message }}</p>
-    <div v-if="resume" class="final-paper">
+    <section v-if="resume?.upload" class="surface original-preview" aria-labelledby="original-name">
+      <header>
+        <h2 id="original-name">{{ resume.upload.name }}</h2>
+        <p>原件上传 · {{ resume.upload.contentType === 'application/pdf' ? 'PDF' : 'Word' }}</p>
+      </header>
+      <div class="original-text">
+        <h3>正文预览</h3>
+        <p v-if="resume.upload.text" class="original-extracted">{{ resume.upload.text }}</p>
+        <p v-else>文件中没有可提取的文字。下载原件即可查看完整内容和版式。</p>
+      </div>
+    </section>
+    <div v-else-if="resume?.content" class="final-paper">
       <ResumePreview :content="resume.content" :editable="false" />
     </div>
   </main>
@@ -88,6 +103,14 @@ onBeforeUnmount(() => { requestId++; printMargins?.remove() })
 .final-header nav a { display: inline-flex; align-items: center; text-decoration: none; }
 .final-paper { padding: clamp(.45rem, 3vw, 1.8rem); margin-top: .8rem; border-radius: .7rem; background: #e6ebe3; }
 .final-paper > :deep(.resume-paper) { max-width: 210mm; }
+.original-preview { margin-top: .8rem; overflow: hidden; }
+.original-preview header, .original-text { padding: clamp(1rem, 4vw, 1.6rem); }
+.original-preview header { border-bottom: 1px solid var(--outline); }
+.original-preview header h2 { font-size: 1.08rem; overflow-wrap: anywhere; }
+.original-preview header p { margin-top: .35rem; color: var(--muted); font-size: .9rem; }
+.original-text h3 { margin-bottom: .7rem; font-size: .95rem; }
+.original-text p { line-height: 1.65; }
+.original-extracted { white-space: pre-wrap; overflow-wrap: anywhere; }
 .final-feedback { margin-top: .75rem; }
 @media print {
   :global(html), :global(body) { background: white !important; }

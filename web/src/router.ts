@@ -12,6 +12,7 @@ export const router = createRouter({
     { path: '/login', name: 'login', component: () => import('./views/AuthView.vue'), meta: { title: '登录' } },
     { path: '/register', name: 'register', component: () => import('./views/AuthView.vue'), meta: { title: '注册' } },
     { path: '/resume/edit', name: 'resume-draft', component: () => import('./views/ResumeDraftView.vue'), meta: { title: '简历制作', role: 'STUDENT' } },
+    { path: '/resume/upload', name: 'resume-upload', component: () => import('./views/ResumeUploadView.vue'), meta: { title: '上传简历', role: 'STUDENT' } },
     { path: '/resume/final', name: 'resume-final', component: () => import('./views/ResumeFinalView.vue'), meta: { title: '简历成稿', role: 'STUDENT' } },
     { path: '/workspace', name: 'workspace', component: () => import('./views/WorkspaceView.vue'), meta: { title: '学生工作台', role: 'STUDENT' } },
     { path: '/admin', redirect: { name: 'admin-users' } },

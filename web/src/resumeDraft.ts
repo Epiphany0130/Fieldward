@@ -105,7 +105,7 @@ export interface ResumeContent {
 
 export interface ResumeSubmission {
   version: number
-  draftRevision: number
+  draftRevision: number | null
   submittedAt: string
 }
 
@@ -115,13 +115,15 @@ export interface ResumeDraft {
   updatedAt: string | null
   content: ResumeContent
   submission: ResumeSubmission | null
+  submittedDraftVersion: number | null
 }
 
 export interface ResumeFinal {
   accountId: string
   version: number
   submittedAt: string
-  content: ResumeContent
+  content: ResumeContent | null
+  upload: { name: string; contentType: string; sizeBytes: number; text: string } | null
 }
 
 export function emptyProfile(): Profile {

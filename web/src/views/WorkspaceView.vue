@@ -78,9 +78,12 @@ onBeforeUnmount(() => { active = false })
           <div>
             <h2 id="workspace-resume-title">我的简历</h2>
             <p>已提交第 {{ workspace.latestResumeVersion }} 版</p>
+            <p v-if="workspace.resumeName" class="workspace-resume-name">{{ workspace.resumeName }}</p>
           </div>
           <div class="workspace-links">
             <RouterLink class="button button-quiet" :to="{ name: 'resume-draft' }">编辑简历</RouterLink>
+            <RouterLink class="button button-quiet"
+                        :to="{ name: 'resume-upload', query: { from: 'workspace' } }">上传新版本</RouterLink>
             <RouterLink class="button button-primary"
                         :to="{ name: 'resume-final', query: { version: String(workspace.latestResumeVersion) } }">查看成稿</RouterLink>
           </div>
@@ -103,6 +106,7 @@ onBeforeUnmount(() => { active = false })
   background: var(--primary); color: #fff; font: 650 1.25rem/1 Georgia, serif;
 }
 .workspace-resume { display: grid; gap: 1rem; padding: 1rem; }
+.workspace-resume-name { overflow-wrap: anywhere; }
 .workspace-links { display: flex; flex-wrap: wrap; gap: .5rem; }
 .workspace-links .button { display: inline-flex; align-items: center; text-decoration: none; }
 .workspace-feedback { padding: 1.1rem; }

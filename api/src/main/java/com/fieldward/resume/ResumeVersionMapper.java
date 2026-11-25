@@ -8,18 +8,26 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 interface ResumeVersionMapper {
     String COLUMNS = "version, draft_revision, submitted_at";
+    String DOCUMENT_COLUMNS = "version, submitted_at, content::text AS content, upload_request_id::text AS upload_request_id";
+
+    @Select("SELECT id FROM accounts WHERE id = #{accountId} FOR NO KEY UPDATE")
+    Long lockAccount(long accountId);
 
     @Select("SELECT " + COLUMNS + " FROM resume_versions WHERE account_id = #{accountId} ORDER BY version DESC LIMIT 1")
     Submission latest(long accountId);
 
     @Select("""
-            SELECT version, submitted_at, content::text AS content FROM resume_versions
+            SELECT
+            """ + DOCUMENT_COLUMNS + """
+             FROM resume_versions
             WHERE account_id = #{accountId} ORDER BY version DESC LIMIT 1
             """)
     StoredVersion latestDocument(long accountId);
 
     @Select("""
-            SELECT version, submitted_at, content::text AS content FROM resume_versions
+            SELECT
+            """ + DOCUMENT_COLUMNS + """
+             FROM resume_versions
             WHERE account_id = #{accountId} AND version = #{version}
             """)
     StoredVersion findDocument(@Param("accountId") long accountId, @Param("version") long version);
@@ -27,16 +35,24 @@ interface ResumeVersionMapper {
     @Select("SELECT " + COLUMNS + " FROM resume_versions WHERE account_id = #{accountId} AND draft_revision = #{revision}")
     Submission findByDraftRevision(@Param("accountId") long accountId, @Param("revision") long revision);
 
+    @Select("""
+            SELECT
+            """ + COLUMNS + """
+             FROM resume_versions WHERE account_id = #{accountId} AND upload_request_id = CAST(#{requestId} AS uuid)
+            """)
+    Submission findByUploadRequest(@Param("accountId") long accountId, @Param("requestId") String requestId);
+
     @Select(value = """
-            INSERT INTO resume_versions (account_id, version, draft_revision, content)
-            SELECT #{accountId}, COALESCE(MAX(version), 0) + 1, #{revision}, CAST(#{content} AS jsonb)
+            INSERT INTO resume_versions (account_id, version, draft_revision, content, upload_request_id)
+            SELECT #{accountId}, COALESCE(MAX(version), 0) + 1, #{revision}, CAST(#{content} AS jsonb),
+                   CAST(#{requestId} AS uuid)
             FROM resume_versions WHERE account_id = #{accountId}
             RETURNING
             """ + COLUMNS, affectData = true)
-    Submission insert(@Param("accountId") long accountId, @Param("revision") long revision,
-                      @Param("content") String content);
+    Submission insert(@Param("accountId") long accountId, @Param("revision") Long revision,
+                      @Param("content") String content, @Param("requestId") String requestId);
 
-    record Submission(long version, long draftRevision, OffsetDateTime submittedAt) {}
+    record Submission(long version, Long draftRevision, OffsetDateTime submittedAt) {}
 
-    record StoredVersion(long version, OffsetDateTime submittedAt, String content) {}
+    record StoredVersion(long version, OffsetDateTime submittedAt, String content, String uploadRequestId) {}
 }

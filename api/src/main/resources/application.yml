@@ -10,6 +10,10 @@ server:
         same-site: lax
         secure: ${FIELDWARD_SECURE_COOKIE:true}
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   session:
     jdbc:
       initialize-schema: never

@@ -38,12 +38,13 @@ export async function requestApi(path: string, method: string, data?: object,
     const csrf = await api<CsrfToken>('/auth/csrf')
     headers.set(csrf.headerName, csrf.token)
   }
-  if (data) headers.set('Content-Type', 'application/json')
+  const body = data instanceof FormData ? data : data ? JSON.stringify(data) : undefined
+  if (typeof body === 'string') headers.set('Content-Type', 'application/json')
 
   const response = await fetch(`/api${path}`, {
     method,
     headers,
-    body: data ? JSON.stringify(data) : undefined,
+    body,
     credentials: 'same-origin',
     cache: 'no-store',
     signal,
@@ -55,6 +56,7 @@ export async function requestApi(path: string, method: string, data?: object,
       400: '请检查填写的信息后重试。',
       401: '登录已失效，请重新登录。',
       403: '当前请求没有权限，请刷新页面后重试。',
+      413: '简历文件不能超过 5 MB。',
     }
     const detail = problem?.detail
     const message = typeof detail === 'string' && /[\u3400-\u9fff]/.test(detail)
