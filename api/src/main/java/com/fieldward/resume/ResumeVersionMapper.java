@@ -12,6 +12,18 @@ interface ResumeVersionMapper {
     @Select("SELECT " + COLUMNS + " FROM resume_versions WHERE account_id = #{accountId} ORDER BY version DESC LIMIT 1")
     Submission latest(long accountId);
 
+    @Select("""
+            SELECT version, submitted_at, content::text AS content FROM resume_versions
+            WHERE account_id = #{accountId} ORDER BY version DESC LIMIT 1
+            """)
+    StoredVersion latestDocument(long accountId);
+
+    @Select("""
+            SELECT version, submitted_at, content::text AS content FROM resume_versions
+            WHERE account_id = #{accountId} AND version = #{version}
+            """)
+    StoredVersion findDocument(@Param("accountId") long accountId, @Param("version") long version);
+
     @Select("SELECT " + COLUMNS + " FROM resume_versions WHERE account_id = #{accountId} AND draft_revision = #{revision}")
     Submission findByDraftRevision(@Param("accountId") long accountId, @Param("revision") long revision);
 
@@ -25,4 +37,6 @@ interface ResumeVersionMapper {
                       @Param("content") String content);
 
     record Submission(long version, long draftRevision, OffsetDateTime submittedAt) {}
+
+    record StoredVersion(long version, OffsetDateTime submittedAt, String content) {}
 }

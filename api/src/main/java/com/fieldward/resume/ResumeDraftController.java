@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
@@ -77,10 +78,22 @@ class ResumeDraftController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "草稿已在其他页面更新，请加载最新版本后提交");
         }
         var content = json.readValue(draft.content(), ResumeDraftContent.class);
-        if (content.profile().name().isBlank() || content.education().school().isBlank()) {
+        if (content.profile().name().isBlank() || !content.hasSchool()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写姓名和学校");
         }
         return versions.insert(accountId, draft.revision(), draft.content());
+    }
+
+    @GetMapping("/final")
+    FinalView finalDocument(@AuthenticationPrincipal AccountPrincipal student,
+                            @RequestParam(required = false) @Positive Long version) {
+        long accountId = student.accountId();
+        var document = version == null ? versions.latestDocument(accountId) : versions.findDocument(accountId, version);
+        if (document == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到该简历版本");
+        }
+        return new FinalView(Long.toString(accountId), document.version(), document.submittedAt(),
+                json.readValue(document.content(), ResumeDraftContent.class));
     }
 
     private long requireAccount(AccountPrincipal student, String expectedId) {
@@ -102,6 +115,8 @@ class ResumeDraftController {
 
     record SubmissionInput(@NotNull @Pattern(regexp = "[0-9]{1,19}") String accountId,
                            @NotNull @Positive Long revision) {}
+
+    record FinalView(String accountId, long version, OffsetDateTime submittedAt, ResumeDraftContent content) {}
 
     record DraftView(String accountId, long revision, OffsetDateTime updatedAt, ResumeDraftContent content,
                      ResumeVersionMapper.Submission submission) {}

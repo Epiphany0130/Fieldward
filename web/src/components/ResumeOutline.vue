@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { resumeSections, type ResumeContent, type ResumePanel, type ResumeSection } from '../resumeDraft'
+import { resumeSections, resumeSectionTitle, type ResumeContent, type ResumePanel, type ResumeSection } from '../resumeDraft'
 
 const props = defineProps<{ content: ResumeContent; panel: ResumePanel; busy: boolean }>()
 const emit = defineEmits<{
@@ -8,15 +8,20 @@ const emit = defineEmits<{
   add: [section: ResumeSection]
 }>()
 const picker = ref<HTMLDetailsElement>()
+const schoolFilled = computed(() => [props.content.education, ...props.content.additionalEducation]
+  .some(({ school }) => school.trim()))
 const outline = computed(() => [
   { id: 'PROFILE' as const, label: '个人信息', icon: '人', status: props.content.profile.name.trim() ? '已填' : '' },
-  { id: 'EDUCATION' as const, label: '教育背景', icon: '学', status: props.content.education.school.trim() ? '已填' : '' },
+  { id: 'EDUCATION' as const, label: '教育背景', icon: '学', status: schoolFilled.value ? '已填' : '' },
   ...props.content.layout.sections.map((id) => {
     const section = resumeSections.find((entry) => entry.id === id)!
     const count = id === 'SKILLS'
       ? props.content.skills.length
       : props.content.experiences.filter((item) => item.type === id).length
-    return { ...section, status: count ? String(count) : '' }
+    return {
+      ...section, label: resumeSectionTitle(props.content.layout, id),
+      status: props.content.layout.hiddenSections.includes(id) ? '已隐藏' : count ? String(count) : '',
+    }
   }),
 ])
 const available = computed(() => resumeSections.filter(({ id }) => !props.content.layout.sections.includes(id)))
@@ -58,7 +63,7 @@ function addSection(section: ResumeSection) {
         <span>姓名</span><span>{{ content.profile.name.trim() ? '已填写' : '待填写' }}</span>
       </button>
       <button type="button" @click="emit('select', 'EDUCATION')">
-        <span>学校</span><span>{{ content.education.school.trim() ? '已填写' : '待填写' }}</span>
+        <span>学校</span><span>{{ schoolFilled ? '已填写' : '待填写' }}</span>
       </button>
     </div>
   </aside>
@@ -87,7 +92,7 @@ button[aria-current] .section-glyph { background: #2b6048; color: #fff; }
 .section-picker summary { border-color: var(--outline); list-style: none; color: var(--primary); }
 .section-picker summary::-webkit-details-marker { display: none; }
 .section-picker[open] summary { background: #e8eee4; }
-.section-picker div { margin-top: .3rem; padding: .2rem; border: 1px solid #dbe2d9; border-radius: .45rem; }
+.section-picker div { max-height: 17rem; overflow: auto; margin-top: .3rem; padding: .2rem; border: 1px solid #dbe2d9; border-radius: .45rem; }
 .outline-checklist { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid #dfe5dc; }
 .outline-checklist p { margin-bottom: .2rem; padding-inline: .55rem; color: var(--muted); font-size: .75rem; font-weight: 650; }
 .outline-checklist button { font-weight: 500; }

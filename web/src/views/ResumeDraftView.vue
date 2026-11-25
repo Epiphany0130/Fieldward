@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRouter } from 'vue-router'
 import { ApiError, api, errorMessage } from '../api'
+import ResumeEducationFields from '../components/ResumeEducationFields.vue'
+import ResumeExperienceFields from '../components/ResumeExperienceFields.vue'
+import ResumeLayoutSettings from '../components/ResumeLayoutSettings.vue'
+import ResumeProfileFields from '../components/ResumeProfileFields.vue'
 import ResumeOutline from '../components/ResumeOutline.vue'
 import ResumePreview from '../components/ResumePreview.vue'
 import {
-  confirmDiscardDraft, draftHasUnsavedChanges, resumeSections,
+  activeSections, confirmDiscardDraft, defaultAppearance, draftHasUnsavedChanges, emptyEducation, emptyProfile,
+  hasEducation, resumeSections, resumeSectionTitle,
   type Education, type Experience, type ExperienceType, type Profile, type ResumeContent, type ResumeDraft,
   type ResumeLayout, type ResumePanel, type ResumeSection, type ResumeSubmission, type Skill,
 } from '../resumeDraft'
@@ -17,17 +22,25 @@ const experiencePrompts: Record<ExperienceType, string> = {
   PROJECT: '交代项目解决了什么问题、你的分工，以及最后做出的成果。',
   INTERNSHIP: '说明你参与了什么工作、交付了什么，哪些部分由你负责。',
   ACTIVITY: '可以记录社团、竞赛或志愿经历。说明你承担的职责和结果。',
+  STRENGTH: '用一个可说明的例子展示你的优势，例如你怎样独立解决了一个问题。',
+  HONOR: '记录奖项或证书的名称、颁发机构和时间。能够核验时可补上链接。',
+  RESEARCH: '写清研究问题、你的分工和实际成果。课题正在进行也可以注明。',
+  PORTFOLIO: '放上作品或源码链接，并说明能在其中看到什么和你完成的部分。',
+  OTHER: '补充与求职目标有关的经历，例如助教、志愿服务或学生组织工作。',
+  CUSTOM: '给栏目取一个容易理解的标题，再写下与求职目标相关的内容。',
 }
 const limit = 30
 const router = useRouter()
-const profile = reactive<Profile>({ name: '', email: '', phone: '' })
-const education = reactive<Education>({ school: '', major: '', degree: '', graduation: '' })
+const profile = ref(emptyProfile())
+const educationRows = ref<Row<Education>[]>([{ key: 0, value: emptyEducation() }])
 const experiences = ref<Row<Experience>[]>([])
 const skills = ref<Row<Skill>[]>([])
 const base = ref<ResumeDraft>()
 const savedContent = ref('')
 const panel = ref<ResumePanel>('PROFILE')
-const layout = reactive<ResumeLayout>({ theme: 'RULED', density: 'STANDARD', sections: ['COURSEWORK', 'SKILLS'] })
+const layout = ref<ResumeLayout>({
+  theme: 'RULED', density: 'STANDARD', sections: ['COURSEWORK', 'SKILLS'], titles: {}, hiddenSections: [], appearance: defaultAppearance(),
+})
 const formatting = ref(false)
 const zoom = ref(100)
 const mobileView = ref<'edit' | 'preview'>('edit')
@@ -37,31 +50,39 @@ const loadError = ref('')
 const saveError = ref('')
 const conflict = ref(false)
 const checkBasics = ref(false)
-let nextKey = 0
+let nextKey = 1
 
-const content = computed<ResumeContent>(() => ({
-  profile: { ...profile },
-  education: { ...education },
-  experiences: experiences.value.map(({ value }) => value)
-    .filter(({ title, role, period, context, contribution }) => [title, role, period, context, contribution]
-      .some((field) => field.trim())),
-  skills: skills.value.map(({ value }) => value).filter(({ name }) => name.trim()),
-  layout: { ...layout, sections: [...layout.sections] },
-}))
+const content = computed<ResumeContent>(() => {
+  const [education, ...additional] = educationRows.value.map(({ value }) => value)
+  return {
+    profile: profile.value,
+    education: education ?? emptyEducation(),
+    additionalEducation: additional.filter(hasEducation),
+    experiences: experiences.value.map(({ value }) => value)
+      .filter(({ title, role, period, context, contribution, details }) =>
+        [title, role, period, context, contribution, details.organization, details.city, details.link]
+          .some((field) => field.trim())),
+    skills: skills.value.map(({ value }) => value).filter(({ name, description }) => name.trim() || description.trim()),
+    layout: layout.value,
+  }
+})
 const optionalSection = computed(() => resumeSections.find(({ id }) => id === panel.value))
-const sectionIndex = computed(() => layout.sections.findIndex((id) => id === panel.value))
+const sectionIndex = computed(() => layout.value.sections.findIndex((id) => id === panel.value))
 const experienceRows = computed(() => experiences.value.filter(({ value }) => value.type === panel.value))
+const sectionHidden = computed(() => Boolean(optionalSection.value && layout.value.hiddenSections.includes(optionalSection.value.id)))
 const sectionHasContent = computed(() => panel.value === 'SKILLS'
   ? content.value.skills.length > 0
   : content.value.experiences.some(({ type }) => type === panel.value))
-const panelHeading = computed(() => optionalSection.value?.label ?? (panel.value === 'PROFILE' ? '个人信息' : '教育背景'))
+const panelHeading = computed(() => optionalSection.value
+  ? resumeSectionTitle(layout.value, optionalSection.value.id)
+  : panel.value === 'PROFILE' ? '个人信息' : '教育背景')
 const busy = computed(() => Boolean(action.value) || loading.value)
 const fingerprint = computed(() => JSON.stringify(content.value))
 const dirty = computed(() => Boolean(base.value) && fingerprint.value !== savedContent.value)
 const submitted = computed(() => Boolean(base.value?.submission)
   && base.value?.submission?.draftRevision === base.value?.revision && !dirty.value)
-const nameInvalid = computed(() => checkBasics.value && !profile.name.trim())
-const schoolInvalid = computed(() => checkBasics.value && !education.school.trim())
+const nameInvalid = computed(() => checkBasics.value && !profile.value.name.trim())
+const schoolInvalid = computed(() => checkBasics.value && !educationRows.value.some(({ value }) => value.school.trim()))
 const status = computed(() => {
   if (action.value === 'submit') return '正在提交…'
   if (action.value === 'save') return '正在保存…'
@@ -87,23 +108,32 @@ async function editFromPreview(next: ResumePanel) {
 }
 
 function addSection(section: ResumeSection) {
-  if (!layout.sections.includes(section)) layout.sections.push(section)
+  if (!layout.value.sections.includes(section)) layout.value.sections.push(section)
   selectPanel(section)
 }
 
 function moveSection(delta: number) {
   const from = sectionIndex.value
   const to = from + delta
-  if (from < 0 || to < 0 || to >= layout.sections.length) return
-  const [section] = layout.sections.splice(from, 1)
-  layout.sections.splice(to, 0, section)
+  if (from < 0 || to < 0 || to >= layout.value.sections.length) return
+  const [section] = layout.value.sections.splice(from, 1)
+  layout.value.sections.splice(to, 0, section)
+}
+
+function toggleSection() {
+  const section = optionalSection.value?.id
+  if (!section) return
+  if (sectionHidden.value) layout.value.hiddenSections = layout.value.hiddenSections.filter((id) => id !== section)
+  else layout.value.hiddenSections.push(section)
 }
 
 function removeEmptySection() {
   if (sectionIndex.value < 0 || sectionHasContent.value) return
   if (panel.value === 'SKILLS') skills.value = []
   else experiences.value = experiences.value.filter(({ value }) => value.type !== panel.value)
-  layout.sections.splice(sectionIndex.value, 1)
+  layout.value.sections.splice(sectionIndex.value, 1)
+  delete layout.value.titles[panel.value as ResumeSection]
+  layout.value.hiddenSections = layout.value.hiddenSections.filter((id) => id !== panel.value)
   selectPanel('PROFILE')
 }
 
@@ -111,10 +141,29 @@ function changeZoom(delta: number) {
   zoom.value = Math.min(130, Math.max(70, zoom.value + delta))
 }
 
+async function addEducation() {
+  if (educationRows.value.length >= 10) return
+  const item = row(emptyEducation())
+  educationRows.value.push(item)
+  await nextTick()
+  document.getElementById(`resume-school-${item.key}`)?.focus()
+}
+
+function moveEntry<T>(all: Row<T>[], group: Row<T>[], index: number, delta: number) {
+  const target = group[index + delta]
+  if (!target) return
+  const from = all.findIndex(({ key }) => key === group[index].key)
+  const to = all.findIndex(({ key }) => key === target.key)
+  const current = all[from]
+  all[from] = all[to]
+  all[to] = current
+}
+
 async function addExperience() {
   if (!optionalSection.value || optionalSection.value.id === 'SKILLS' || experiences.value.length >= limit) return
   const item = row<Experience>({
     type: optionalSection.value.id, title: '', role: '', period: '', context: '', contribution: '',
+    details: { organization: '', city: '', link: '', textStyle: 'PARAGRAPH' },
   })
   experiences.value.push(item)
   await nextTick()
@@ -123,7 +172,7 @@ async function addExperience() {
 
 async function addSkill() {
   if (skills.value.length >= limit) return
-  const item = row<Skill>({ name: '', proficiency: 'EXPOSURE' })
+  const item = row<Skill>({ name: '', proficiency: 'EXPOSURE', description: '' })
   skills.value.push(item)
   await nextTick()
   document.getElementById(`skill-name-${item.key}`)?.focus()
@@ -138,15 +187,12 @@ async function loadDraft() {
     if (draft.accountId !== account.value?.id) {
       throw new ApiError(403, '当前登录账号已变更，请刷新页面以打开当前账号的草稿。')
     }
-    Object.assign(profile, draft.content.profile)
-    Object.assign(education, draft.content.education)
-    experiences.value = draft.content.experiences.map((value) => row({ ...value }))
-    skills.value = draft.content.skills.map((value) => row({ ...value }))
-    const populated = new Set<ResumeSection>(draft.content.experiences.map(({ type }) => type))
-    if (draft.content.skills.length) populated.add('SKILLS')
-    const preferences = draft.content.layout
-    Object.assign(layout, preferences, { sections: [...new Set([...preferences.sections, ...populated])] })
-    if (optionalSection.value && !layout.sections.includes(optionalSection.value.id)) selectPanel('PROFILE')
+    profile.value = draft.content.profile
+    educationRows.value = [draft.content.education, ...draft.content.additionalEducation].map(row)
+    experiences.value = draft.content.experiences.map(row)
+    skills.value = draft.content.skills.map(row)
+    layout.value = { ...draft.content.layout, sections: activeSections(draft.content) }
+    if (optionalSection.value && !layout.value.sections.includes(optionalSection.value.id)) selectPanel('PROFILE')
     savedContent.value = fingerprint.value
     base.value = draft
     saveError.value = ''
@@ -239,6 +285,8 @@ onBeforeUnmount(() => {
         <p role="status" class="resume-status" :data-dirty="dirty"><span aria-hidden="true"></span>{{ status }}</p>
         <button class="button button-quiet" type="button" :disabled="!dirty || busy || conflict"
                 @click="writeResume('save')">保存草稿</button>
+        <RouterLink v-if="base.submission" class="button button-quiet final-link"
+                    :to="{ name: 'resume-final' }">查看成稿</RouterLink>
         <button class="button button-primary" type="button" :disabled="submitted || busy || conflict"
                 @click="writeResume('submit')">{{ submitted ? '已提交' : '提交简历' }}</button>
       </div>
@@ -284,39 +332,28 @@ onBeforeUnmount(() => {
 
           <form novalidate @submit.prevent="writeResume('save')">
             <fieldset class="editor-fields" :disabled="busy">
+              <label v-if="optionalSection" class="field section-title-field">
+                <span>栏目名称</span>
+                <input v-model="layout.titles[optionalSection.id]" :placeholder="optionalSection.label" maxlength="30" />
+              </label>
               <div v-if="panel === 'PROFILE'" class="editor-content">
-                <div class="field">
-                  <label for="resume-name">姓名 <span class="required-label">必填</span></label>
-                  <input id="resume-name" v-model="profile.name" autocomplete="name" maxlength="80"
-                         placeholder="填写简历上显示的姓名" required :aria-invalid="nameInvalid"
-                         :aria-describedby="nameInvalid ? 'resume-name-error' : undefined" />
-                  <span v-if="nameInvalid" id="resume-name-error" class="field-error">请填写姓名</span>
-                </div>
-                <div class="editor-grid">
-                  <label class="field"><span>邮箱</span><input v-model="profile.email" inputmode="email" autocomplete="email" maxlength="254" /></label>
-                  <label class="field"><span>电话</span><input v-model="profile.phone" type="tel" autocomplete="tel" maxlength="40" /></label>
-                </div>
-                <div class="editor-note">
-                  <p>不知道经历和技能怎么写？填好姓名和学校，就可以先提交第一版。</p>
-                  <button type="button" @click="selectPanel('EDUCATION')">去填写学校 <span aria-hidden="true">→</span></button>
-                </div>
+                <ResumeProfileFields v-model="profile" :invalid="nameInvalid" @education="selectPanel('EDUCATION')" />
               </div>
 
               <div v-else-if="panel === 'EDUCATION'" class="editor-content">
-                <div class="field">
-                  <label for="resume-school">学校 <span class="required-label">必填</span></label>
-                  <input id="resume-school" v-model="education.school" maxlength="120" placeholder="学校全称"
-                         required :aria-invalid="schoolInvalid" :aria-describedby="schoolInvalid ? 'resume-school-error' : undefined" />
-                  <span v-if="schoolInvalid" id="resume-school-error" class="field-error">请填写学校</span>
-                </div>
-                <div class="editor-grid">
-                  <label class="field"><span>专业</span><input v-model="education.major" maxlength="120" /></label>
-                  <label class="field"><span>学历</span><input v-model="education.degree" maxlength="30" placeholder="例如：本科" /></label>
-                </div>
-                <label class="field">
-                  <span>毕业时间</span>
-                  <input v-model="education.graduation" maxlength="30" placeholder="例如：2028 年 6 月" />
-                </label>
+                <fieldset v-for="(item, index) in educationRows" :key="item.key" class="editor-entry">
+                  <legend>教育经历 {{ index + 1 }}</legend>
+                  <ResumeEducationFields v-model="item.value" :field-id="index === 0 ? 'resume-school' : `resume-school-${item.key}`"
+                                         :invalid="index === 0 && schoolInvalid" :primary="index === 0" />
+                  <div v-if="educationRows.length > 1" class="entry-tools" role="group" :aria-label="`教育经历 ${index + 1} 操作`">
+                    <button class="button button-quiet" type="button" :disabled="index === 0"
+                            @click="moveEntry(educationRows, educationRows, index, -1)">上移</button>
+                    <button class="button button-quiet" type="button" :disabled="index === educationRows.length - 1"
+                            @click="moveEntry(educationRows, educationRows, index, 1)">下移</button>
+                    <button class="button button-quiet" type="button" @click="educationRows.splice(index, 1)">移除此段</button>
+                  </div>
+                </fieldset>
+                <button class="button button-quiet entry-action" type="button" :disabled="educationRows.length >= 10" @click="addEducation">添加教育经历</button>
               </div>
 
               <div v-else-if="panel === 'SKILLS'" class="editor-content">
@@ -335,8 +372,15 @@ onBeforeUnmount(() => {
                       <option value="INDEPENDENT">能独立使用</option>
                     </select>
                   </div>
-                  <button class="button button-quiet entry-action" type="button" :aria-label="`移除技能 ${index + 1}`"
-                          @click="skills.splice(index, 1)">移除技能</button>
+                  <label class="field"><span>技能说明</span><textarea v-model="item.value.description" rows="3" maxlength="1000"
+                           placeholder="写下你在哪些任务中用过，以及完成了什么。" /></label>
+                  <div class="entry-tools" role="group" :aria-label="`技能 ${index + 1} 操作`">
+                    <button class="button button-quiet" type="button" :disabled="index === 0"
+                            @click="moveEntry(skills, skills, index, -1)">上移</button>
+                    <button class="button button-quiet" type="button" :disabled="index === skills.length - 1"
+                            @click="moveEntry(skills, skills, index, 1)">下移</button>
+                    <button class="button button-quiet" type="button" @click="skills.splice(index, 1)">移除技能</button>
+                  </div>
                 </fieldset>
                 <button class="button button-quiet entry-action" type="button" :disabled="skills.length >= limit" @click="addSkill">添加技能</button>
                 <p v-if="skills.length >= limit" class="help">每份简历最多可记录 30 项技能。</p>
@@ -346,19 +390,15 @@ onBeforeUnmount(() => {
                 <p class="editor-note">{{ experiencePrompts[panel] }}</p>
                 <fieldset v-for="(item, index) in experienceRows" :key="item.key" class="editor-entry">
                   <legend>经历 {{ index + 1 }}</legend>
-                  <label class="field">
-                    <span>经历名称</span>
-                    <input :id="`experience-title-${item.key}`" v-model="item.value.title" maxlength="120"
-                           :placeholder="panel === 'COURSEWORK' ? '例如：数据库课程作业' : undefined" />
-                  </label>
-                  <div class="editor-grid">
-                    <label class="field"><span>角色或分工</span><input v-model="item.value.role" maxlength="80" /></label>
-                    <label class="field"><span>时间</span><input v-model="item.value.period" maxlength="60" placeholder="例如：2025.09–2025.12" /></label>
+                  <ResumeExperienceFields v-model="item.value" :field-id="`experience-title-${item.key}`" />
+                  <div class="entry-tools" role="group" :aria-label="`经历 ${index + 1} 操作`">
+                    <button class="button button-quiet" type="button" :disabled="index === 0"
+                            @click="moveEntry(experiences, experienceRows, index, -1)">上移</button>
+                    <button class="button button-quiet" type="button" :disabled="index === experienceRows.length - 1"
+                            @click="moveEntry(experiences, experienceRows, index, 1)">下移</button>
+                    <button class="button button-quiet" type="button"
+                            @click="experiences = experiences.filter(({ key }) => key !== item.key)">移除经历</button>
                   </div>
-                  <label class="field"><span>任务与背景</span><textarea v-model="item.value.context" rows="2" maxlength="1000" /></label>
-                  <label class="field"><span>你完成的部分</span><textarea v-model="item.value.contribution" rows="3" maxlength="2000" /></label>
-                  <button class="button button-quiet entry-action" type="button" :aria-label="`移除经历 ${index + 1}`"
-                          @click="experiences = experiences.filter(({ key }) => key !== item.key)">移除经历</button>
                 </fieldset>
                 <button class="button button-quiet entry-action" type="button" :disabled="experiences.length >= limit" @click="addExperience">添加经历</button>
                 <p v-if="experiences.length >= limit" class="help">每份简历最多可记录 30 项经历。</p>
@@ -366,8 +406,9 @@ onBeforeUnmount(() => {
             </fieldset>
           </form>
 
-          <footer v-if="optionalSection && !sectionHasContent" class="editor-footer">
-            <button type="button" :disabled="busy" @click="removeEmptySection">移除空栏目</button>
+          <footer v-if="optionalSection" class="editor-footer">
+            <button type="button" :disabled="busy" @click="toggleSection">{{ sectionHidden ? '在成稿中显示' : '从成稿中隐藏' }}</button>
+            <button v-if="!sectionHasContent" type="button" :disabled="busy" @click="removeEmptySection">移除空栏目</button>
           </footer>
         </section>
 
@@ -387,24 +428,7 @@ onBeforeUnmount(() => {
                       aria-controls="resume-format" @click="formatting = !formatting">版式设置</button>
             </div>
           </header>
-          <fieldset v-if="formatting" id="resume-format" class="format-settings" :disabled="busy">
-            <legend class="sr-only">版式设置</legend>
-            <label class="field">
-              <span>风格</span>
-              <select v-model="layout.theme">
-                <option value="RULED">清晰线条</option>
-                <option value="EDITORIAL">书页风格</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>间距</span>
-              <select v-model="layout.density">
-                <option value="COMPACT">紧凑</option>
-                <option value="STANDARD">标准</option>
-                <option value="RELAXED">宽松</option>
-              </select>
-            </label>
-          </fieldset>
+          <ResumeLayoutSettings v-show="formatting" v-model="layout" :busy="busy" />
           <div class="paper-stage">
             <div class="paper-scale" :style="{ '--zoom': zoom / 100 }">
               <ResumePreview :content="content" @edit="editFromPreview" />
@@ -462,22 +486,22 @@ onBeforeUnmount(() => {
 
 .editor-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
 .editor-content { display: grid; gap: .9rem; padding: 1rem .95rem 1.15rem; }
-.editor-content .field, .format-settings .field { font-size: .86rem; }
-.editor-content .field :is(input, select, textarea), .format-settings select { font-size: 1rem; }
-.editor-grid, .format-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
-.editor-content [aria-invalid="true"] { border-color: var(--danger); }
-.field-error { color: var(--danger); font-size: .83rem; }
-.required-label { margin-inline-start: .15rem; color: var(--muted); font-size: .75rem; font-weight: 500; }
-.editor-note {
+.editor-content :deep(.field), .section-title-field { font-size: .86rem; }
+.editor-content :deep(.field :is(input, select, textarea)), .section-title-field input { font-size: 1rem; }
+.editor-content :deep(.editor-grid) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+.editor-content :deep([aria-invalid="true"]) { border-color: var(--danger); }
+.editor-content :deep(.field-error) { color: var(--danger); font-size: .83rem; }
+.editor-content :deep(.required-label) { margin-inline-start: .15rem; color: var(--muted); font-size: .75rem; font-weight: 500; }
+.editor-note, .editor-content :deep(.editor-note) {
   padding: .75rem .8rem; color: #375447; border: 1px solid #dbe5d9; border-radius: .5rem;
   background: #eff4ed; font-size: .86rem; line-height: 1.55;
 }
-.editor-note button, .editor-footer button {
+.editor-content :deep(.editor-note button), .editor-footer button {
   min-height: 44px; padding: .35rem 0; background: transparent; border: 0; cursor: pointer; text-align: left;
   color: var(--primary); font-weight: 650;
 }
-.editor-note button:hover, .editor-footer button:hover:not(:disabled) { text-decoration: underline; }
-.editor-footer { padding: 0 .95rem .25rem; border-top: 1px solid #e4e9e1; }
+.editor-content :deep(.editor-note button:hover), .editor-footer button:hover:not(:disabled) { text-decoration: underline; }
+.editor-footer { display: flex; flex-wrap: wrap; gap: .85rem; padding: 0 .95rem .25rem; border-top: 1px solid #e4e9e1; }
 .editor-footer button { color: var(--muted); font-size: .84rem; }
 .editor-footer button:disabled { opacity: .55; cursor: default; }
 .editor-entry {
@@ -487,6 +511,14 @@ onBeforeUnmount(() => {
 .editor-entry legend { padding-inline: .3rem; font-weight: 650; }
 .editor-entry textarea { resize: vertical; }
 .entry-action { justify-self: start; }
+.section-title-field { margin: .85rem .95rem 0; }
+.entry-tools { display: flex; flex-wrap: wrap; gap: .35rem; }
+.entry-tools .button { font-size: .82rem; padding-inline: .55rem; }
+.editor-content :deep(.editor-details) { border: 1px solid #dce5d9; border-radius: .5rem; padding-inline: .65rem; }
+.editor-content :deep(.editor-details summary) { min-height: 44px; padding-block: .65rem; cursor: pointer; font-weight: 650; }
+.editor-content :deep(.detail-fields) { display: grid; gap: .7rem; padding-bottom: .65rem; }
+.final-link { display: inline-flex; align-items: center; text-decoration: none; }
+
 
 .preview-tools { background: #f9fbf6; border-radius: 1rem 1rem 0 0; }
 .preview-actions .button { font-size: .86rem; }
@@ -494,7 +526,6 @@ onBeforeUnmount(() => {
 .zoom-control .tool-button { border: 0; border-radius: 0; min-height: 42px; }
 .zoom-control .tool-button + .tool-button { border-inline-start: 1px solid var(--outline); }
 .zoom-control .zoom-value { min-width: 3.15rem; font-variant-numeric: tabular-nums; font-size: .83rem; }
-.format-settings { min-width: 0; margin: 0; border: 0; padding: .75rem .95rem; border-bottom: 1px solid #dce4d8; }
 .paper-stage {
   container-type: inline-size; overflow: auto; padding: clamp(.75rem, 2.2vw, 1.65rem);
   max-height: max(440px, calc(100dvh - 14.5rem)); border-radius: 0 0 1rem 1rem;
@@ -502,7 +533,6 @@ onBeforeUnmount(() => {
   background-size: 12px 12px;
 }
 .paper-scale { width: min(100cqw, 42rem); margin-inline: auto; zoom: var(--zoom); }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .mobile-controls { display: none; }
 
 @media (max-width: 980px) {
