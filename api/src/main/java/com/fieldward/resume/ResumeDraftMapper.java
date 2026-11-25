@@ -12,6 +12,9 @@ interface ResumeDraftMapper {
     @Select("SELECT " + COLUMNS + " FROM resume_drafts WHERE account_id = #{accountId}")
     StoredDraft find(long accountId);
 
+    @Select("SELECT " + COLUMNS + " FROM resume_drafts WHERE account_id = #{accountId} FOR UPDATE")
+    StoredDraft lock(long accountId);
+
     @Select(value = """
             INSERT INTO resume_drafts (account_id, content, revision)
             VALUES (#{accountId}, CAST(#{content} AS jsonb), 1)

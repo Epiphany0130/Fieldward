@@ -6,13 +6,27 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 record ResumeDraftContent(
+        @Valid Profile profile,
         @NotNull @Valid Education education,
         @NotNull @Size(max = 30) List<@NotNull @Valid Experience> experiences,
         @NotNull @Size(max = 30) List<@NotNull @Valid Skill> skills
 ) {
-    static ResumeDraftContent empty() {
-        return new ResumeDraftContent(new Education("", "", "", ""), List.of(), List.of());
+    ResumeDraftContent {
+        // Drafts saved before profile fields were introduced have no profile key.
+        if (profile == null) {
+            profile = new Profile("", "", "");
+        }
     }
+
+    static ResumeDraftContent empty() {
+        return new ResumeDraftContent(null, new Education("", "", "", ""), List.of(), List.of());
+    }
+
+    record Profile(
+            @NotNull @Size(max = 80) String name,
+            @NotNull @Size(max = 254) String email,
+            @NotNull @Size(max = 40) String phone
+    ) {}
 
     record Education(
             @NotNull @Size(max = 120) String school,

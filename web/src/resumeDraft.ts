@@ -3,6 +3,12 @@ import { ref } from 'vue'
 export type ExperienceType = 'COURSEWORK' | 'PROJECT' | 'INTERNSHIP' | 'ACTIVITY'
 export type Proficiency = 'EXPOSURE' | 'GUIDED' | 'INDEPENDENT'
 
+export interface Profile {
+  name: string
+  email: string
+  phone: string
+}
+
 export interface Education {
   school: string
   major: string
@@ -23,9 +29,16 @@ export interface Skill {
 }
 
 export interface ResumeContent {
+  profile: Profile
   education: Education
   experiences: Experience[]
   skills: Skill[]
+}
+
+export interface ResumeSubmission {
+  version: number
+  draftRevision: number
+  submittedAt: string
 }
 
 export interface ResumeDraft {
@@ -33,6 +46,7 @@ export interface ResumeDraft {
   revision: number
   updatedAt: string | null
   content: ResumeContent
+  submission: ResumeSubmission | null
 }
 
 export const draftHasUnsavedChanges = ref(false)
