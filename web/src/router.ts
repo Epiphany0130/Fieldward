@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { account, restoreSession } from './session'
 
 export function accountHome() {
-  return { name: account.value?.role === 'ADMIN' ? 'admin-users' : 'workspace' }
+  return { name: account.value?.role === 'ADMIN' ? 'admin-users' : 'resume-draft' }
 }
 
 export const router = createRouter({
@@ -11,6 +11,7 @@ export const router = createRouter({
     { path: '/', redirect: { name: 'login' } },
     { path: '/login', name: 'login', component: () => import('./views/AuthView.vue'), meta: { title: '登录' } },
     { path: '/register', name: 'register', component: () => import('./views/AuthView.vue'), meta: { title: '注册' } },
+    { path: '/resume/edit', name: 'resume-draft', component: () => import('./views/ResumeDraftView.vue'), meta: { title: '简历制作', role: 'STUDENT' } },
     { path: '/workspace', name: 'workspace', component: () => import('./views/WorkspaceView.vue'), meta: { title: '学生工作台', role: 'STUDENT' } },
     { path: '/admin', redirect: { name: 'admin-users' } },
     { path: '/admin/users', name: 'admin-users', component: () => import('./views/AdminUsersView.vue'), meta: { title: '用户管理中心', role: 'ADMIN' } },

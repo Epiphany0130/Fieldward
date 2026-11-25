@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 
-final class AccountPrincipal extends User {
+public final class AccountPrincipal extends User {
     @Serial
     private static final long serialVersionUID = 1L;
 
@@ -19,7 +19,7 @@ final class AccountPrincipal extends User {
         this.sessionVersion = account.sessionVersion();
     }
 
-    long accountId() {
+    public long accountId() {
         return accountId;
     }
 

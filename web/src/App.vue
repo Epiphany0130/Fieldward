@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { errorMessage } from './api'
+import { confirmDiscardDraft } from './resumeDraft'
 import { account, signOut } from './session'
 import './style.css'
 
@@ -10,6 +11,7 @@ const signingOut = ref(false)
 const signOutError = ref('')
 
 async function logout() {
+  if (!confirmDiscardDraft()) return
   signingOut.value = true
   signOutError.value = ''
   try {

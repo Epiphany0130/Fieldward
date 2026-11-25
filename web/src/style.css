@@ -18,7 +18,7 @@ h1, h2, p { margin: 0; }
 h1 { font-size: clamp(1.8rem, 4.5vw, 2.6rem); line-height: 1.23; letter-spacing: -.04em; }
 h2 { font-size: 1.35rem; line-height: 1.35; }
 a { color: var(--primary); text-underline-offset: .22em; }
-button, input { font: inherit; }
+button, input, select, textarea { font: inherit; }
 :focus-visible { outline: 3px solid #38764f; outline-offset: 3px; }
 
 .skip-link {
@@ -116,7 +116,7 @@ button, input { font: inherit; }
 .auth-inner > .notice { margin-bottom: 1rem; }
 
 .field { min-width: 0; display: grid; gap: .4rem; font-weight: 630; }
-.field input {
+.field :is(input, select, textarea) {
   min-width: 0;
   width: 100%;
   min-height: 46px;
