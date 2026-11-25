@@ -1,7 +1,18 @@
 server:
   address: 127.0.0.1
   port: ${FIELDWARD_API_PORT:18080}
+  servlet:
+    session:
+      timeout: 7d
+      cookie:
+        name: FIELDWARD_SESSION
+        http-only: true
+        same-site: lax
+        secure: ${FIELDWARD_SECURE_COOKIE:true}
 spring:
+  session:
+    jdbc:
+      initialize-schema: never
   application:
     name: fieldward
   config:
@@ -21,3 +32,8 @@ mybatis:
 springdoc:
   api-docs:
     path: /api/openapi
+
+fieldward:
+  admin:
+    email: ${FIELDWARD_ADMIN_EMAIL:}
+    password: ${FIELDWARD_ADMIN_PASSWORD:}

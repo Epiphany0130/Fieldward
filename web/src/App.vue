@@ -1,33 +1,49 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
+import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { errorMessage } from './api'
+import { account, signOut } from './session'
+import './style.css'
 
-const status = ref('正在检查连接…')
+const router = useRouter()
+const signingOut = ref(false)
+const signOutError = ref('')
 
-async function checkConnection() {
-  status.value = '正在检查连接…'
+async function logout() {
+  signingOut.value = true
+  signOutError.value = ''
   try {
-    const response = await fetch('/api/health')
-    const health = await response.json()
-    if (!response.ok || health.status !== 'ready') throw new Error('API unavailable')
-    status.value = 'API 和 PostgreSQL 已连接'
-  } catch {
-    status.value = '连接失败，请检查 API 和数据库后重试'
+    await signOut()
+    await router.replace({ name: 'login' })
+  } catch (error) {
+    signOutError.value = errorMessage(error)
+  } finally {
+    signingOut.value = false
   }
 }
-
-onMounted(checkConnection)
 </script>
 
 <template>
-  <main>
-    <h1>循职 Fieldward</h1>
-    <p role="status">{{ status }}</p>
-    <button type="button" @click="checkConnection">重新检查</button>
-  </main>
+  <div class="app">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <RouterLink class="brand" to="/" aria-label="循职 Fieldward 首页">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">循职 <span>Fieldward</span></span>
+        </RouterLink>
+        <div v-if="account" class="account-nav">
+          <span class="account-name">{{ account.displayName }}</span>
+          <button class="button button-quiet" type="button" :disabled="signingOut" @click="logout">
+            {{ signingOut ? '正在退出…' : '退出登录' }}
+          </button>
+        </div>
+      </div>
+    </header>
+    <p v-if="signOutError" class="notice notice-error app-notice" role="alert">{{ signOutError }}</p>
+    <RouterView v-slot="{ Component, route }">
+      <component :is="Component" v-if="Component" :key="route.name" />
+      <main v-else id="main" tabindex="-1" class="page"><p role="status">正在加载…</p></main>
+    </RouterView>
+  </div>
 </template>
-
-<style>
-body { margin: 0; background: #f5f3eb; color: #18332d; font: 16px/1.55 system-ui, sans-serif; }
-main { margin: 5rem auto; max-width: 34rem; padding: 1.5rem; }
-button { min-height: 44px; padding: 0 1rem; font: inherit; cursor: pointer; }
-</style>

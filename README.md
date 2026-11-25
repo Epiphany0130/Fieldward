@@ -31,3 +31,10 @@
 打开 [本地 Web](http://127.0.0.1:5178)。Web 将 `/api` 转发给本地 18080 端口上的 Java 服务。健康检查为 [GET /api/health](http://127.0.0.1:5178/api/health)，OpenAPI 为 [GET /api/openapi](http://127.0.0.1:5178/api/openapi)。
 
 如需另建数据库，请使用含 pgvector 的 PostgreSQL 17，并由数据库管理员预先执行 `CREATE EXTENSION IF NOT EXISTS vector`。应用账号需要数据库连接权限及 `public` schema 的 `USAGE`、`CREATE` 权限。
+
+## 账号入口
+
+- 学生在 [注册页](http://127.0.0.1:5178/register) 用邮箱和密码注册，然后登录。刷新可恢复 PostgreSQL 中的会话。
+- 管理员使用同一个 [登录页](http://127.0.0.1:5178/login)，登录后进入 [用户管理中心](http://127.0.0.1:5178/admin/users)，可以搜索、分页查看以及停用或恢复学生账号。停用会使已登录的学生会话失效。
+- 首次初始化管理员时，在 `.env` 中填写 `FIELDWARD_ADMIN_EMAIL` 和 `FIELDWARD_ADMIN_PASSWORD`，再启动 API。初始密码至少 12 个字符且最多 72 字节。已有管理员重启时沿用原密码。
+- 本地 HTTP 在 `.env` 中设 `FIELDWARD_SECURE_COOKIE=false`。HTTPS 环境使用默认的 `true`。所有写请求先从 `GET /api/auth/csrf` 获取本会话的令牌。
