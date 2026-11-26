@@ -15,6 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 class CareerPlans {
     private static final Logger log = LoggerFactory.getLogger(CareerPlans.class);
     private final CareerMapper careers;
+    private final LegacyCareerBackfill legacy;
     private final MentorConversationMapper conversations;
     private final MentorResumeMapper resumes;
     private final CareerWrites writes;
@@ -24,8 +25,9 @@ class CareerPlans {
     private final java.util.concurrent.ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
 
     CareerPlans(CareerMapper careers, MentorConversationMapper conversations, MentorResumeMapper resumes,
-                CareerWrites writes, CareerFit fit, MentorModel model, JsonMapper json) {
+                CareerWrites writes, CareerFit fit, MentorModel model, JsonMapper json, LegacyCareerBackfill legacy) {
         this.careers = careers;
+        this.legacy = legacy;
         this.conversations = conversations;
         this.resumes = resumes;
         this.writes = writes;
@@ -65,6 +67,7 @@ class CareerPlans {
         try {
             if (!claim.input().text().isBlank() && !model.available()) throw new IOException("Mentor model unavailable");
             writes.finish(claim, fit.analyze(direction, claim.input()));
+            legacy.tryImport(assessment.accountId(), assessment.id());
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         } catch (IOException exception) {
@@ -77,11 +80,15 @@ class CareerPlans {
     }
 
     Summary current(long accountId) {
-        return summary(careers.current(accountId));
+        var stored = careers.current(accountId);
+        if (stored != null) legacy.tryImport(accountId, stored.id());
+        return summary(stored);
     }
 
     Summary archived(long accountId, long id) {
-        return summary(careers.find(accountId, id));
+        var stored = careers.find(accountId, id);
+        if (stored != null) legacy.tryImport(accountId, id);
+        return summary(stored);
     }
 
     boolean needsOnboarding(long conversation) {

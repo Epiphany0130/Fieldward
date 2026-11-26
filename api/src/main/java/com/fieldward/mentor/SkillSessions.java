@@ -41,6 +41,7 @@ class SkillSessions {
             """;
 
     private final SkillSessionMapper sessions;
+    private final LegacyCareerBackfill legacy;
     private final MentorTurnMapper turns;
     private final CareerPlans careers;
     private final MentorModel model;
@@ -48,8 +49,9 @@ class SkillSessions {
     private final TransactionTemplate tx;
 
     SkillSessions(SkillSessionMapper sessions, MentorTurnMapper turns, CareerPlans careers, MentorModel model,
-                  JsonMapper json, TransactionTemplate tx) {
+                  JsonMapper json, TransactionTemplate tx, LegacyCareerBackfill legacy) {
         this.sessions = sessions;
+        this.legacy = legacy;
         this.turns = turns;
         this.careers = careers;
         this.model = model;
@@ -59,7 +61,9 @@ class SkillSessions {
 
     View get(long account, long id) {
         var session = sessions.find(account, id);
-        return session == null ? null : view(session);
+        if (session == null) return null;
+        legacy.tryImport(account, id);
+        return view(session);
     }
 
     View start(long account, long id, Map<String, Mark> marks) {
@@ -87,6 +91,7 @@ class SkillSessions {
             if (tested.isEmpty()) turns.logSideTurn(conversation, side, null, reportLine(state));
             return sessions.find(account, id);
         });
+        legacy.tryImport(account, id);
         return view(session);
     }
 
@@ -114,7 +119,7 @@ class SkillSessions {
                 case LEARNING -> lesson(state, state.lessonIndex() + 1);
                 case DONE -> throw new IllegalStateException("Skill session already finished");
             };
-            return tx.execute(status -> {
+            var result = tx.execute(status -> {
                 if (state.phase() == Phase.LEARNING) {
                     turns.lockConversation(account);
                     if (turns.active(session.conversationId(), session.sideChatId()) != null) {
@@ -127,6 +132,8 @@ class SkillSessions {
                 turns.logSideTurn(session.conversationId(), session.sideChatId(), testing ? answer : null, next.reply());
                 return view(sessions.find(account, id));
             });
+            legacy.tryImport(account, id);
+            return result;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw error(HttpStatus.SERVICE_UNAVAILABLE, "Mentor 暂时未响应，请稍后继续");
