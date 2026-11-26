@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError, api, errorMessage } from '../api'
 import type { CareerAssessment, CareerState } from '../career'
@@ -17,6 +17,8 @@ const forLatest = computed(() => current.value?.resumeVersion === state.value?.r
 const pending = computed(() => forLatest.value && (current.value?.status === 'ANALYZING' || current.value?.status === 'WAITING_TEXT'))
 const showFailure = computed(() => forLatest.value && current.value?.status === 'FAILED')
 const changing = computed(() => route.query.change === '1')
+const proposal = ref<{ id: string; introduction: string; shared: string[]; added: string[]; removed: string[]; advice: string }>()
+watch(selected, () => { proposal.value = undefined })
 let timer: number | undefined
 let active = true
 let reanalysisRequested = false
@@ -90,6 +92,28 @@ async function explore() {
   }
 }
 
+async function choose(directionId: string) {
+  if (current.value && current.value.directionId !== directionId) {
+    submitting.value = true
+    message.value = ''
+    try { proposal.value = await api('/career/direction-changes', 'POST', { directionId }) }
+    catch (error) { await showError(error) }
+    finally { submitting.value = false }
+  } else await start(directionId)
+}
+
+async function confirmChange() {
+  if (!proposal.value || submitting.value) return
+  submitting.value = true
+  try {
+    await api(`/career/direction-changes/${proposal.value.id}/confirm`, 'POST')
+    proposal.value = undefined
+    submitting.value = false
+    await refresh(true)
+  } catch (error) { await showError(error) }
+  finally { submitting.value = false }
+}
+
 async function start(directionId: string) {
   const accountId = account.value?.id
   const resumeVersion = state.value?.resumeVersion
@@ -137,7 +161,7 @@ onBeforeUnmount(() => { active = false; window.clearTimeout(timer) })
     </p>
     <p v-if="!state && loading" role="status">正在读取职业方向…</p>
 
-    <form v-if="state" @submit.prevent="start(selected)">
+    <form v-if="state" @submit.prevent="choose(selected)">
       <section v-if="pending || submitting" class="surface analysis-status" role="status">
         <div>
           <strong>{{ current?.status === 'WAITING_TEXT' ? '正在等待扫描件识别' : '正在分析简历' }}</strong>
@@ -167,10 +191,21 @@ onBeforeUnmount(() => { active = false; window.clearTimeout(timer) })
           </span>
         </label>
       </fieldset>
+      <section v-if="proposal" class="surface analysis-status" aria-live="polite">
+        <div>
+          <strong>确认切换方向</strong><p>{{ proposal.introduction }}</p>
+          <p>共同能力：{{ proposal.shared.join('、') || '暂无' }}</p>
+          <p>新增能力：{{ proposal.added.join('、') || '暂无' }}</p>
+          <p>原方向能力：{{ proposal.removed.join('、') || '暂无' }}</p>
+          <p>{{ proposal.advice }}</p>
+          <button class="button button-primary" type="button" :disabled="submitting" @click="confirmChange">确认切换</button>
+          <button class="button button-quiet" type="button" @click="proposal = undefined">暂不切换</button>
+        </div>
+      </section>
       <footer class="career-actions">
         <a :href="state.referenceUrl" target="_blank" rel="noopener noreferrer">方向参考 · 黑马程序员</a>
         <button class="button button-primary" type="submit" :disabled="!selected || pending || submitting">
-          {{ showFailure && selected === current?.directionId ? '重新分析' : '确认方向并分析' }}
+          {{ current && selected !== current.directionId ? '比较方向' : showFailure ? '重新分析' : '确认方向并分析' }}
         </button>
       </footer>
     </form>

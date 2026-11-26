@@ -225,6 +225,9 @@ class CareerFit {
     record Report(Integer matchPercent, Stage stage, int interviewThreshold, boolean coreCovered, SourceQuality sourceQuality,
                   List<SkillResult> skills, List<Step> roadmap, Integer analysisVersion,
                   RoadmapCatalog.Route route, Map<String, TopicSuggestion> topicSuggestions) {
+        Report withoutMatch() {
+            return new Report(null, stage, interviewThreshold, coreCovered, sourceQuality, skills, roadmap, analysisVersion, route, topicSuggestions);
+        }
         boolean usesCurrentAnalysis() {
             return analysisVersion != null && analysisVersion >= ANALYSIS_VERSION;
         }

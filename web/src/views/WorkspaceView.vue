@@ -104,6 +104,13 @@ onBeforeUnmount(() => { active = false })
 
     <template v-else-if="workspace">
       <h1>学生工作台</h1>
+      <section v-if="career && !report" class="surface fit-banner" aria-label="当前方向">
+        <div>
+          <h2>{{ career.directionTitle }}</h2>
+          <p>{{ career.status === 'FAILED' ? '分析未完成，可以重试。' : career.status === 'ANALYZING' ? '正在分析简历。' : '等待继续分析。' }}</p>
+          <RouterLink class="button button-quiet" :to="{ name: 'career-direction', query: { change: '1' } }">查看方向与分析状态</RouterLink>
+        </div>
+      </section>
       <section v-if="career && report" class="surface fit-banner" aria-labelledby="fit-heading">
         <div>
           <h2 id="fit-heading">{{ career.directionTitle }}</h2>

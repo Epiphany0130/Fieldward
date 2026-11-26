@@ -63,9 +63,8 @@ class CareerWrites {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "简历已有新版本，请刷新后再分析");
         }
         var previous = careers.current(accountId);
-        if (previous != null && previous.status() == CareerMapper.Status.ANALYZING && previous.resumeVersion() == version
-                && !previous.directionId().equals(direction)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "正在分析当前方向，稍后可以更换");
+        if (previous != null && !previous.directionId().equals(direction)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "请先比较并确认方向切换");
         }
 
         var document = resumes.find(Long.parseLong(workspace.conversationId()), version);

@@ -115,6 +115,7 @@ class CareerPlans {
         if (stored == null) return null;
         var direction = CareerCatalog.require(stored.directionId());
         var report = stored.report() == null ? null : json.readValue(stored.report(), CareerFit.Report.class);
+        if (report != null) report = report.withoutMatch();
         return new Summary(Long.toString(stored.id()), stored.resumeVersion(), stored.directionId(), direction.title(),
                 stored.status(), report, report != null && !report.usesCurrentAnalysis());
     }
