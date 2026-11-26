@@ -36,14 +36,16 @@ class ResumeDraftController {
     private final ResumeUploadMapper uploads;
     private final ResumeSubmissions submissions;
     private final JsonMapper json;
+    private final ResumeUpdateService updates;
 
     ResumeDraftController(ResumeDraftMapper drafts, ResumeVersionMapper versions, ResumeUploadMapper uploads,
-                          ResumeSubmissions submissions, JsonMapper json) {
+                          ResumeSubmissions submissions, JsonMapper json, ResumeUpdateService updates) {
         this.drafts = drafts;
         this.versions = versions;
         this.uploads = uploads;
         this.submissions = submissions;
         this.json = json;
+        this.updates = updates;
     }
 
     @GetMapping("/draft")
@@ -88,6 +90,18 @@ class ResumeDraftController {
                                           @RequestPart MultipartFile file) {
         long studentId = requireAccount(student, accountId);
         return submissions.submitUpload(studentId, requestId.toString(), ResumeUpload.read(file));
+    }
+
+    @PostMapping("/convert")
+    ResumeUpdateService.ConversionResult convert(@AuthenticationPrincipal AccountPrincipal student,
+                                                 @RequestBody @Valid ConversionInput input) {
+        return updates.convertUpload(requireAccount(student, input.accountId()), input.version(), input.latestVersion(), input.draftRevision());
+    }
+
+    @PostMapping("/restore")
+    ResumeVersionMapper.Submission restore(@AuthenticationPrincipal AccountPrincipal student,
+                                           @RequestBody @Valid ConversionInput input) {
+        return updates.restore(requireAccount(student, input.accountId()), input.version(), input.latestVersion(), input.draftRevision());
     }
 
     @GetMapping("/final")
@@ -139,6 +153,10 @@ class ResumeDraftController {
 
     record SubmissionInput(@NotNull @Pattern(regexp = "[0-9]{1,19}") String accountId,
                            @NotNull @Positive Long revision) {}
+
+    record ConversionInput(@NotNull @Pattern(regexp = "[0-9]{1,19}") String accountId,
+                           @NotNull @Positive Long version, @NotNull @Positive Long latestVersion,
+                           @NotNull @PositiveOrZero Long draftRevision) {}
 
     record FinalView(String accountId, long version, OffsetDateTime submittedAt, ResumeDraftContent content,
                      ResumeUploadMapper.Metadata upload) {}

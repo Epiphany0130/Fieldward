@@ -3,13 +3,15 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError, api, errorMessage } from '../api'
 import ResumePreview from '../components/ResumePreview.vue'
-import type { ResumeFinal } from '../resumeDraft'
+import type { ResumeDraft, ResumeFinal } from '../resumeDraft'
 import { account, forgetSession } from '../session'
+import { performVersionAction } from '../resumeVersionAction'
 
 const route = useRoute()
 const router = useRouter()
 const resume = ref<ResumeFinal>()
 const loading = ref(false)
+const converting = ref(false)
 const message = ref('')
 let requestId = 0
 let printMargins: HTMLStyleElement | undefined
@@ -49,6 +51,53 @@ async function loadVersion() {
   }
 }
 
+async function loadBaseline() {
+  const draft = await api<ResumeDraft>('/resume/draft')
+  if (draft.accountId !== account.value?.id || !draft.submission) throw new ApiError(403, '登录账号已变更，请刷新页面。')
+  return draft
+}
+
+async function convertUpload() {
+  if (!resume.value?.upload || converting.value) return
+  converting.value = true
+  message.value = ''
+  try {
+    const result = await performVersionAction(resume.value.version, loadBaseline,
+      () => window.confirm('转换会替换当前已保存的简历草稿。原件和已提交版本会保留，是否继续？'),
+      (version, draft) => api<{ version: number; needsSupplement: boolean }>('/resume/convert', 'POST', {
+        accountId: draft.accountId, version, latestVersion: draft.submission!.version, draftRevision: draft.revision,
+      }))
+    if (!result) return
+    await router.push({ name: 'resume-draft', query: { converted: result.needsSupplement ? 'empty' : 'review' } })
+  } catch (error) {
+    message.value = errorMessage(error)
+  } finally {
+    converting.value = false
+  }
+}
+
+async function restoreVersion() {
+  if (!resume.value || converting.value) return
+  converting.value = true
+  message.value = ''
+  try {
+    const result = await performVersionAction(resume.value.version, loadBaseline,
+      (draft, version) => {
+        if (version === draft.submission!.version) throw new ApiError(409, '这已经是最新版本。')
+        return window.confirm('恢复会创建一个新版本。可编辑版本会替换当前已保存的草稿；历史版本和原件会保留。是否继续？')
+      },
+      (version, draft) => api<{ version: number }>('/resume/restore', 'POST', {
+        accountId: draft.accountId, version, latestVersion: draft.submission!.version, draftRevision: draft.revision,
+      }))
+    if (!result) return
+    await router.push({ name: 'resume-final' })
+  } catch (error) {
+    message.value = errorMessage(error)
+  } finally {
+    converting.value = false
+  }
+}
+
 function printDocument() {
   if (resume.value) window.print()
 }
@@ -70,6 +119,8 @@ onBeforeUnmount(() => { requestId++; printMargins?.remove() })
         <RouterLink v-if="resume.version > 1" class="button button-quiet"
                     :to="{ name: 'resume-final', query: { version: String(resume.version - 1) } }">上一版</RouterLink>
         <RouterLink v-if="route.query.version" class="button button-quiet" :to="{ name: 'resume-final' }">最新版本</RouterLink>
+        <button v-if="route.query.version" class="button button-quiet" type="button" :disabled="converting" @click="restoreVersion">恢复此版本</button>
+        <button v-if="resume.upload" class="button button-quiet" type="button" :disabled="converting" @click="convertUpload">{{ converting ? '正在转换…' : '转换为可编辑简历' }}</button>
         <a v-if="resume.upload" class="button button-primary"
            :href="`/api/resume/final/original?version=${resume.version}`">下载原件</a>
         <button v-else class="button button-primary" type="button" @click="printDocument">打印 / 存为 PDF</button>
@@ -89,7 +140,7 @@ onBeforeUnmount(() => { requestId++; printMargins?.remove() })
         <p v-else-if="resume.upload.ocrStatus && ['PENDING', 'PROCESSING', 'RETRY'].includes(resume.upload.ocrStatus)">
           扫描件等待识别。可以先下载原件查看。
         </p>
-        <p v-else>文件中没有可用的正文。下载原件即可查看完整内容和版式。</p>
+        <p v-else>暂未提取到正文。仍可转换为空白简历并手动补充，也可以下载原件查看。</p>
       </div>
     </section>
     <div v-else-if="resume?.content" class="final-paper">

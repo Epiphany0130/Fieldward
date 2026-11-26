@@ -32,5 +32,22 @@ interface ResumeDraftMapper {
     StoredDraft update(@Param("accountId") long accountId, @Param("revision") long revision,
                        @Param("content") String content);
 
+    @Select(value = """
+            INSERT INTO resume_drafts (account_id, content, revision)
+            VALUES (#{accountId}, CAST(#{content} AS jsonb), #{revision})
+            ON CONFLICT (account_id) DO NOTHING
+            RETURNING
+            """ + COLUMNS, affectData = true)
+    StoredDraft insertAtRevision(@Param("accountId") long accountId, @Param("revision") long revision, @Param("content") String content);
+
+    @Select(value = """
+            UPDATE resume_drafts
+            SET content = CAST(#{content} AS jsonb), revision = GREATEST(revision, #{latestRevision}) + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE account_id = #{accountId} AND revision = #{revision}
+            RETURNING
+            """ + COLUMNS, affectData = true)
+    StoredDraft updateAfterVersion(@Param("accountId") long accountId, @Param("revision") long revision,
+                                   @Param("latestRevision") long latestRevision, @Param("content") String content);
+
     record StoredDraft(String content, long revision, OffsetDateTime updatedAt) {}
 }

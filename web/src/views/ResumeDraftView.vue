@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { onBeforeRouteLeave, RouterLink, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError, api, errorMessage } from '../api'
 import ResumeEducationFields from '../components/ResumeEducationFields.vue'
 import ResumeExperienceFields from '../components/ResumeExperienceFields.vue'
@@ -31,6 +31,7 @@ const experiencePrompts: Record<ExperienceType, string> = {
 }
 const limit = 30
 const router = useRouter()
+const route = useRoute()
 const profile = ref(emptyProfile())
 const educationRows = ref<Row<Education>[]>([{ key: 0, value: emptyEducation() }])
 const experiences = ref<Row<Experience>[]>([])
@@ -297,6 +298,8 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <p v-if="route.query.converted === 'empty'" class="notice resume-feedback" role="status">未能从原件提取正文，请填写姓名、学校和其他内容；原件仍可在历史版本下载。</p>
+    <p v-else-if="route.query.converted === 'review'" class="notice resume-feedback" role="status">已将原件正文放入「其他」栏目，请核对并整理到相应栏目。原件仍可在历史版本下载。</p>
     <div v-if="!base" class="surface resume-placeholder">
       <p v-if="loading" role="status">正在加载简历…</p>
       <template v-else-if="loadError">
