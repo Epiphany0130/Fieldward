@@ -14,6 +14,7 @@ export const router = createRouter({
     { path: '/resume/edit', name: 'resume-draft', component: () => import('./views/ResumeDraftView.vue'), meta: { title: '简历制作', role: 'STUDENT' } },
     { path: '/resume/upload', name: 'resume-upload', component: () => import('./views/ResumeUploadView.vue'), meta: { title: '上传简历', role: 'STUDENT' } },
     { path: '/resume/final', name: 'resume-final', component: () => import('./views/ResumeFinalView.vue'), meta: { title: '简历成稿', role: 'STUDENT' } },
+    { path: '/workspace/realtime-preview', name: 'realtime-preview', component: () => import('./components/RealtimeSession.vue'), meta: { title: '音视频设备检查', role: 'STUDENT' } },
     { path: '/workspace', name: 'workspace', component: () => import('./views/WorkspaceView.vue'), meta: { title: '学生工作台', role: 'STUDENT' } },
     { path: '/workspace/career', name: 'career-direction', component: () => import('./views/CareerDirectionView.vue'), meta: { title: '选择求职方向', role: 'STUDENT' } },
     { path: '/workspace/career/plan/:id', name: 'career-plan', component: () => import('./views/CareerResultView.vue'), meta: { title: '匹配与学习路线', role: 'STUDENT' } },

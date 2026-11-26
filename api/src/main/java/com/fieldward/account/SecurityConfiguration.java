@@ -76,7 +76,7 @@ class SecurityConfiguration {
                                     HttpSessionCsrfTokenRepository csrfTokens) {
         return http
                 .securityContext(security -> security.securityContextRepository(contexts))
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokens))
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokens).ignoringRequestMatchers("/api/internal/realtime/**"))
                 .requestCache(AbstractHttpConfigurer::disable)
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .logout(logout -> logout.logoutUrl("/api/auth/logout")
@@ -101,8 +101,9 @@ class SecurityConfiguration {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/health", "/api/openapi", "/api/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers("/api/internal/realtime/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/resume/**", "/api/workspace", "/api/mentor/**", "/api/career/**").hasRole("STUDENT")
+                        .requestMatchers("/api/resume/**", "/api/workspace", "/api/mentor/**", "/api/career/**", "/api/realtime/**").hasRole("STUDENT")
                         .anyRequest().authenticated())
                 .build();
     }
