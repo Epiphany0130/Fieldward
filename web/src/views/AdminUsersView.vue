@@ -97,6 +97,7 @@ onMounted(() => loadUsers())
 <template>
   <main id="main" tabindex="-1" class="page">
     <h1>用户管理中心</h1>
+    <RouterLink to="/admin/jobs">岗位管理</RouterLink>
     <section class="surface directory" aria-label="账号列表" :aria-busy="busy">
       <form class="search-form" @submit.prevent="loadUsers(1, search.trim())">
         <label class="field" for="search-users">

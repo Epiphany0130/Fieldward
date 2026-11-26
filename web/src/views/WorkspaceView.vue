@@ -104,6 +104,7 @@ onBeforeUnmount(() => { active = false })
 
     <template v-else-if="workspace">
       <h1>学生工作台</h1>
+      <RouterLink to="/workspace/jobs">浏览岗位</RouterLink>
       <section v-if="career && !report" class="surface fit-banner" aria-label="当前方向">
         <div>
           <h2>{{ career.directionTitle }}</h2>
