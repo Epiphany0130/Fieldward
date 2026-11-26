@@ -17,6 +17,7 @@ export const router = createRouter({
     { path: '/workspace/realtime-preview', name: 'realtime-preview', component: () => import('./components/RealtimeSession.vue'), meta: { title: '音视频设备检查', role: 'STUDENT' } },
     { path: '/workspace', name: 'workspace', component: () => import('./views/WorkspaceView.vue'), meta: { title: '学生工作台', role: 'STUDENT' } },
     { path: '/workspace/career', name: 'career-direction', component: () => import('./views/CareerDirectionView.vue'), meta: { title: '选择求职方向', role: 'STUDENT' } },
+    { path: '/workspace/learning/:directionId', name: 'learning-route', component: () => import('./views/LearningRouteView.vue'), meta: { title: '学习路线', role: 'STUDENT' } },
     { path: '/workspace/career/plan/:id', name: 'career-plan', component: () => import('./views/CareerResultView.vue'), meta: { title: '匹配与学习路线', role: 'STUDENT' } },
     { path: '/workspace/career/interview/:id', name: 'career-interview', component: () => import('./views/CareerResultView.vue'), meta: { title: '模拟面试准备', role: 'STUDENT' } },
     { path: '/workspace/career/skills/:id', name: 'career-skills', component: () => import('./views/SkillSessionView.vue'), meta: { title: '技能核验旁聊', role: 'STUDENT' } },

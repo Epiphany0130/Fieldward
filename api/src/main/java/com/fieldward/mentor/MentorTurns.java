@@ -24,8 +24,10 @@ class MentorTurns {
     private final MentorMemory memory;
     private final CareerPlans careers;
     private final SkillSessions skills;
+    private final LearningMapper learning;
 
-    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers, SkillSessions skills, CreditService credits, ExpiredCreditCleanup expiredCredits) {
+    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers, SkillSessions skills, CreditService credits, ExpiredCreditCleanup expiredCredits, LearningMapper learning) {
+        this.learning = learning;
         this.expiredCredits = expiredCredits;
         this.credits = credits;
         this.mapper = mapper;
@@ -116,6 +118,12 @@ class MentorTurns {
         var guidance = skills.guidance(turn.conversationId(), turn.sideChatId());
         if (guidance.isBlank()) {
             guidance = careers.guidance(turn.conversationId()) + "\n" + skills.overview(turn.conversationId());
+        }
+        var topic = learning.context(turn.conversationId(), turn.sideChatId());
+        if (topic != null) {
+            guidance += "\n当前旁聊是学生主动选择的学习主题：" + topic.title()
+                    + "。相关学习目标：" + (topic.objectives() == null ? "按学生需要确定" : topic.objectives())
+                    + "。结合学生回答解释概念并给出小练习，一次只问一个问题；不要把学习或自述当作验证通过。";
         }
         if (!guidance.isBlank()) messages.add(new MentorModel.Message("user", guidance));
         var context = memory.retrieve(turn, recent);

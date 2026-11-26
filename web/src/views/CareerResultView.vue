@@ -80,6 +80,8 @@ onBeforeUnmount(() => { request++ })
           <p v-else-if="!report.route">从待补的技能开始，每一步都有一个可以交给 Mentor 核对的小任务。</p>
         </div>
         <div class="result-actions">
+          <RouterLink class="button button-quiet open-chat" :to="{ name: 'learning-route', params: { directionId: assessment.directionId } }">自由选择知识点</RouterLink>
+
           <RouterLink v-if="assessment.needsReanalysis" class="button button-primary"
                       :to="{ name: 'career-direction', query: { reanalyze: assessment.directionId } }">使用新版 AI 分析</RouterLink>
           <RouterLink class="button button-quiet"
