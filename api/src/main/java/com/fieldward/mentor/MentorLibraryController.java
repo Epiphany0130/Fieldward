@@ -33,9 +33,11 @@ import org.springframework.web.server.ResponseStatusException;
 class MentorLibraryController {
     private final MentorMemory memory;
     private final MentorTurns turns;
+    private final ForgetRequestService forget;
 
-    MentorLibraryController(MentorMemory memory, MentorTurns turns) {
+    MentorLibraryController(MentorMemory memory, MentorTurns turns, ForgetRequestService forget) {
         this.memory = memory;
+        this.forget = forget;
         this.turns = turns;
     }
 
@@ -83,6 +85,21 @@ class MentorLibraryController {
                 .contentType(MediaType.parseMediaType(file.contentType()))
                 .body(file.bytes());
     }
+
+    @PostMapping("/forget-requests")
+    ForgetRequestService.ForgetProposal proposeForget(@AuthenticationPrincipal AccountPrincipal student,
+                                                      @RequestBody @Valid ForgetInput input) {
+        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "遗忘功能尚未开放，请稍后再试");
+    }
+
+    @PostMapping("/forget-requests/{id}/confirm")
+    ForgetRequestService.ForgetResult confirmForget(@AuthenticationPrincipal AccountPrincipal student,
+                                                     @PathVariable String id, @RequestBody @Valid ForgetConfirmation input) {
+        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "遗忘功能尚未开放，请稍后再试");
+    }
+
+    record ForgetInput(@NotBlank @Size(max = 1000) String description) {}
+    record ForgetConfirmation(Boolean confirmed, @jakarta.validation.constraints.NotNull ForgetRequestService.Scope scope) {}
 
     private void requireAccount(AccountPrincipal student, String expected) {
         if (!Long.toString(student.accountId()).equals(expected)) {
