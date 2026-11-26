@@ -76,6 +76,15 @@ interface CareerMapper {
     Assessment existing(@Param("accountId") long accountId, @Param("resumeVersion") long resumeVersion,
                         @Param("directionId") String directionId, @Param("digest") String digest);
 
+    @Select("SELECT " + ROW + """
+            FROM career_assessments assessment WHERE assessment.account_id = #{accountId}
+                AND assessment.resume_version = #{resumeVersion} AND assessment.direction_id = #{directionId}
+                AND assessment.status = 'READY'
+            ORDER BY assessment.id DESC LIMIT 1
+            """)
+    Assessment latestReady(@Param("accountId") long accountId, @Param("resumeVersion") long resumeVersion,
+                           @Param("directionId") String directionId);
+
     @Insert("""
             INSERT INTO career_targets (account_id, assessment_id) VALUES (#{accountId}, #{assessmentId})
             ON CONFLICT (account_id) DO UPDATE SET assessment_id = EXCLUDED.assessment_id

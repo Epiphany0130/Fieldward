@@ -106,6 +106,16 @@ interface MentorTurnMapper {
             """, affectData = true)
     long openLearning(@Param("conversation") long conversation, @Param("opening") String opening, @Param("sources") String sources);
 
+    @Update("""
+            UPDATE mentor_turns SET mentor_reply = #{opening}, sources = CAST(#{sources} AS jsonb), updated_at = CURRENT_TIMESTAMP
+            WHERE id = (
+                SELECT id FROM mentor_turns WHERE conversation_id = #{conversation} AND side_chat_id IS NULL
+                ORDER BY id DESC LIMIT 1
+            ) AND student_message IS NULL AND sources -> 0 ->> 'href' = #{previousSource}
+            """)
+    int reviseUnansweredOpening(@Param("conversation") long conversation, @Param("previousSource") String previousSource,
+                                 @Param("opening") String opening, @Param("sources") String sources);
+
     @Select(value = """
             UPDATE mentor_turns SET status = 'STREAMING', attempt = attempt + 1, updated_at = CURRENT_TIMESTAMP,
                 lease_until = CURRENT_TIMESTAMP + make_interval(secs => #{leaseSeconds})

@@ -19,6 +19,7 @@ const showFailure = computed(() => forLatest.value && current.value?.status === 
 const changing = computed(() => route.query.change === '1')
 let timer: number | undefined
 let active = true
+let reanalysisRequested = false
 
 async function showError(error: unknown) {
   if (!active) return
@@ -53,6 +54,15 @@ async function refresh(followResult: boolean) {
     }
     state.value = snapshot
     const result = snapshot.current
+    const requestedDirection = route.query.reanalyze
+    if (!reanalysisRequested && !submitting.value && !pending.value && typeof requestedDirection === 'string'
+        && snapshot.directions.some(({ id }) => id === requestedDirection)
+        && (result?.directionId !== requestedDirection || !forLatest.value || result.needsReanalysis)) {
+      reanalysisRequested = true
+      selected.value = requestedDirection
+      await start(requestedDirection)
+      return
+    }
     if (!result) return
     if (!selected.value || pending.value) selected.value = result.directionId
     if (!forLatest.value) return

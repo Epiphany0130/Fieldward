@@ -124,6 +124,8 @@ onBeforeUnmount(() => { active = false })
             {{ interviewReady ? '查看面试准备' : '查看匹配与学习路线' }}
           </RouterLink>
           <RouterLink class="button button-quiet" :to="{ name: 'career-direction', query: { change: '1' } }">更换方向或重评</RouterLink>
+          <RouterLink v-if="career.needsReanalysis" class="button button-quiet"
+                      :to="{ name: 'career-direction', query: { reanalyze: career.directionId } }">使用新版 AI 分析</RouterLink>
         </div>
       </section>
       <div class="workspace-layout">

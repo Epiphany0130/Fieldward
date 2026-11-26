@@ -7,6 +7,7 @@ import { forgetSession } from '../session'
 
 const labels: Record<CareerSkill['level'], string> = {
   PROJECT: '简历有实践证据',
+  INFERRED: '已掌握（前置推断）',
   MENTION: '仅提及，待核验',
   MISSING: '简历未体现',
   UNKNOWN: '待核对',
@@ -67,10 +68,15 @@ onBeforeUnmount(() => { request++ })
         <div>
           <p>{{ assessment.directionTitle }}</p>
           <h1>{{ interview ? '模拟面试准备' : '匹配分析与学习路线' }}</h1>
-          <p v-if="interview">核心能力在简历里有实践依据。面试已进入准备阶段。</p>
+          <p v-if="interview">匹配度和核心技能已达到面试准备标准。</p>
           <p v-else>从待补的技能开始，每一步都有一个可以交给 Mentor 核对的小任务。</p>
         </div>
-        <RouterLink class="button button-quiet" :to="{ name: 'career-direction', query: { change: '1' } }">更换方向或重新分析</RouterLink>
+        <div class="result-actions">
+          <RouterLink v-if="assessment.needsReanalysis" class="button button-primary"
+                      :to="{ name: 'career-direction', query: { reanalyze: assessment.directionId } }">使用新版 AI 分析</RouterLink>
+          <RouterLink class="button button-quiet"
+                      :to="{ name: 'career-direction', query: { change: '1' } }">更换方向或重新分析</RouterLink>
+        </div>
       </header>
 
       <section class="surface match-summary" aria-labelledby="match-heading">
@@ -85,7 +91,7 @@ onBeforeUnmount(() => { request++ })
             查看本次分析使用的简历第 {{ assessment.resumeVersion }} 版
           </RouterLink>
           <p v-if="report.sourceQuality === 'UNREADABLE'">当前原件无可读正文，已提供基础学习路线。可以补交清晰或带文本的简历后重评。</p>
-          <p v-else>实践证据计全分，仅提及计半分。达到 {{ report.interviewThreshold }}% 且核心技能都有实践证据时进入面试准备。</p>
+          <p v-else>直接实践和推断已掌握的前置技能计全分，仅提及计半分。达到 {{ report.interviewThreshold }}% 且核心技能已覆盖时进入面试准备。</p>
           <p v-if="report.sourceQuality === 'OCR'">分析参考扫描件识别文本，引用可与原件核对。</p>
         </div>
       </section>
@@ -101,6 +107,7 @@ onBeforeUnmount(() => { request++ })
                 <span class="core-label">权重 {{ skill.weight }} 分</span>
                 <span class="skill-level" :data-level="skill.level">{{ labels[skill.level] }}</span>
               </div>
+              <p v-if="skill.inference">{{ skill.inference }}</p>
               <blockquote v-if="skill.quote">{{ skill.quote }}</blockquote>
             </li>
           </ul>
@@ -130,6 +137,7 @@ onBeforeUnmount(() => { request++ })
 .career-result-heading h1 { margin: .3rem 0 .55rem; }
 .career-result-heading p, .match-details p, .result-panel p { color: var(--muted); line-height: 1.65; }
 .career-result-heading .button, .open-chat { display: inline-flex; align-items: center; text-decoration: none; }
+.result-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .match-summary { display: grid; grid-template-columns: minmax(12rem, .35fr) 1fr; gap: 1rem 2rem; padding: clamp(.85rem, 3vw, 1.3rem); }
 .match-score, .match-details { display: grid; gap: .5rem; }
 .match-details { align-content: center; }
@@ -146,7 +154,7 @@ onBeforeUnmount(() => { request++ })
 .skill-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem .5rem; }
 .result-panel h3 { font-size: 1rem; margin: 0; }
 .core-label, .skill-level { font-size: .78rem; color: var(--muted); }
-.skill-level[data-level="PROJECT"] { color: var(--primary); }
+.skill-level:is([data-level="PROJECT"], [data-level="INFERRED"]) { color: var(--primary); }
 .skill-level[data-level="MENTION"] { color: #79512b; }
 .skills blockquote { margin: .35rem 0 0; border-inline-start: 2px solid var(--outline); padding-inline-start: .55rem; color: var(--muted); overflow-wrap: anywhere; }
 .roadmap p { margin-top: .3rem; }

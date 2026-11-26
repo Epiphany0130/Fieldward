@@ -11,8 +11,9 @@ export interface CareerSkill {
   title: string
   weight: number
   core: boolean
-  level: 'PROJECT' | 'MENTION' | 'MISSING' | 'UNKNOWN'
+  level: 'PROJECT' | 'INFERRED' | 'MENTION' | 'MISSING' | 'UNKNOWN'
   quote: string | null
+  inference: string | null
 }
 
 export interface CareerStep {
@@ -39,6 +40,7 @@ export interface CareerAssessment {
   directionTitle: string
   status: 'WAITING_TEXT' | 'ANALYZING' | 'READY' | 'FAILED'
   report: CareerReport | null
+  needsReanalysis: boolean
 }
 
 export interface CareerState {

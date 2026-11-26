@@ -98,7 +98,7 @@ class MentorModel {
 
     tools.jackson.databind.JsonNode completeJson(String instructions, Object input) throws IOException, InterruptedException {
         var messages = List.of(new Message("system", instructions), new Message("user", json.writeValueAsString(input)));
-        var payload = Map.of("model", model, "stream", false, "max_completion_tokens", 1500,
+        var payload = Map.of("model", model, "stream", false, "max_completion_tokens", 2800,
                 "thinking", Map.of("type", "disabled"), "response_format", Map.of("type", "json_object"), "messages", messages);
         var response = http.send(request(payload, Duration.ofSeconds(40), "application/json"), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) throw new IOException("Career assessment provider HTTP " + response.statusCode());
