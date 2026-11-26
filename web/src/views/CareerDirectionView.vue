@@ -76,6 +76,20 @@ async function refresh(followResult: boolean) {
   }
 }
 
+async function explore() {
+  if (submitting.value) return
+  submitting.value = true
+  message.value = ''
+  try {
+    await api('/career/exploration', 'POST')
+    await router.push({ name: 'workspace' })
+  } catch (error) {
+    await showError(error)
+  } finally {
+    if (active) submitting.value = false
+  }
+}
+
 async function start(directionId: string) {
   const accountId = account.value?.id
   const resumeVersion = state.value?.resumeVersion
@@ -135,6 +149,10 @@ onBeforeUnmount(() => { active = false; window.clearTimeout(timer) })
                     :to="{ name: 'resume-upload' }">上传更清晰的版本</RouterLink>
       </section>
       <p v-if="showFailure" class="notice notice-error" role="alert">这次分析没有完成。可以重试，或选择其他方向。</p>
+      <section class="surface analysis-status">
+        <div><strong>还没有确定方向？</strong><p>先和 Mentor 探索兴趣，或学习通用入门知识。</p></div>
+        <button class="button button-quiet" type="button" :disabled="submitting || pending" @click="explore">开始探索与通用学习</button>
+      </section>
       <fieldset :disabled="pending || submitting" class="directions">
         <legend>职业方向</legend>
         <label v-for="option in state.directions" :key="option.id" class="surface direction" :class="{ selected: selected === option.id }">

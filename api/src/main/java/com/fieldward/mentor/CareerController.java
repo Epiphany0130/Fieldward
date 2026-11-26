@@ -52,6 +52,11 @@ class CareerController {
         return result;
     }
 
+    @PostMapping("/exploration")
+    CareerPlans.ExplorationState explore(@AuthenticationPrincipal AccountPrincipal student) {
+        return plans.beginExploration(student.accountId());
+    }
+
     @PostMapping("/assessment")
     CareerPlans.Summary analyze(@AuthenticationPrincipal AccountPrincipal student, @Valid @RequestBody Input input) {
         if (!Long.toString(student.accountId()).equals(input.accountId())) {

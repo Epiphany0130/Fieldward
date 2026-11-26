@@ -49,6 +49,10 @@ class CareerPlans {
                 directions, CareerCatalog.SOURCE);
     }
 
+    ExplorationState beginExploration(long accountId) {
+        return writes.beginExploration(accountId);
+    }
+
     Summary start(long accountId, long resumeVersion, String directionId) {
         var direction = CareerCatalog.require(directionId);
         var claim = writes.claim(accountId, directionId, resumeVersion);
@@ -120,6 +124,7 @@ class CareerPlans {
         workers.shutdownNow();
     }
 
+    record ExplorationState(String conversationId) {}
     record Option(String id, String title, String description, String roles, List<String> topics) {}
     record Summary(String id, long resumeVersion, String directionId, String directionTitle, CareerMapper.Status status,
                    CareerFit.Report report, boolean needsReanalysis) {}

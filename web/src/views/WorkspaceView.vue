@@ -19,6 +19,7 @@ const router = useRouter()
 const route = useRoute()
 const workspace = ref<Workspace>()
 const career = ref<CareerAssessment | null>(null)
+const nextStep = ref('')
 const report = computed(() => career.value?.report)
 const interviewReady = computed(() => report.value?.stage === 'INTERVIEW_READY')
 const firstStep = computed(() => report.value?.roadmap[0])
@@ -41,7 +42,7 @@ async function loadWorkspace() {
   loading.value = true
   message.value = ''
   try {
-    const state = await api<{ accountId: string; workspace: Workspace | null; career: CareerAssessment | null }>('/workspace')
+    const state = await api<{ accountId: string; workspace: Workspace | null; career: CareerAssessment | null; nextStep: string | null }>('/workspace')
     if (!active) return
     if (state.accountId !== account.value?.id) throw new ApiError(403, '登录账号已变更，请刷新页面。')
     if (!state.workspace) {
@@ -54,6 +55,7 @@ async function loadWorkspace() {
     }
     workspace.value = state.workspace
     career.value = state.career
+    nextStep.value = state.nextStep ?? ''
     const channels = await api<{ accountId: string; sides: SideChat[] }>('/mentor/side-chats')
     if (!active) return
     if (channels.accountId !== account.value?.id) throw new ApiError(403, '登录账号已变更，请刷新页面。')
@@ -129,6 +131,7 @@ onBeforeUnmount(() => { active = false })
                       :to="{ name: 'career-direction', query: { reanalyze: career.directionId } }">使用新版 AI 分析</RouterLink>
         </div>
       </section>
+      <p v-if="nextStep" class="surface workspace-guidance">Mentor · {{ nextStep }}</p>
       <div class="workspace-layout">
         <section class="surface conversation" aria-labelledby="conversation-title">
           <header class="conversation-header">
@@ -157,7 +160,6 @@ onBeforeUnmount(() => { active = false })
                         :to="{ name: 'resume-upload', query: { from: 'workspace' } }">上传新版本</RouterLink>
             <RouterLink class="button button-primary"
                         :to="{ name: 'resume-final', query: { version: String(workspace.latestResumeVersion) } }">查看成稿</RouterLink>
-            <RouterLink class="button button-quiet" :to="{ name: 'mentor-memory' }">打开 Mentor 记忆库</RouterLink>
             <RouterLink v-if="!report" class="button button-quiet"
                         :to="{ name: 'career-direction', query: { change: '1' } }">选择求职方向</RouterLink>
           </div>
@@ -171,7 +173,7 @@ onBeforeUnmount(() => { active = false })
               </RouterLink>
             </nav>
             <form class="side-form" @submit.prevent="createSide">
-              <label for="side-title">新建旁聊</label>
+              <label for="side-title">新建旁聊或通用学习主题</label>
               <input id="side-title" v-model="sideTitle" maxlength="80" placeholder="例如：复盘数据库项目">
               <button class="button button-quiet" :disabled="creatingSide || !sideTitle.trim()" type="submit">创建旁聊</button>
               <p v-if="sideError" class="notice notice-error" role="alert">{{ sideError }}</p>
@@ -189,6 +191,7 @@ onBeforeUnmount(() => { active = false })
 .fit-banner { display: grid; grid-template-columns: auto minmax(12rem, 1fr) auto; gap: .75rem 1.25rem; align-items: center; padding: .9rem 1rem; margin-bottom: 1rem; }
 .fit-banner h2 { font-size: 1.1rem; }
 .fit-banner p { margin-top: .25rem; color: var(--muted); line-height: 1.5; }
+.workspace-guidance { padding: .85rem 1rem; margin-bottom: 1rem; line-height: 1.55; overflow-wrap: anywhere; }
 .workspace-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, .38fr); gap: 1rem; align-items: start; }
 .conversation { min-width: 0; min-height: 21rem; }
 .conversation-header { display: flex; align-items: center; gap: .75rem; padding: 1rem; border-bottom: 1px solid #dde6dc; }

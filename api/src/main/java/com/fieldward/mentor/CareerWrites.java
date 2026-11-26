@@ -43,6 +43,17 @@ class CareerWrites {
     }
 
     @Transactional
+    public CareerPlans.ExplorationState beginExploration(long accountId) {
+        Long conversation = turns.lockConversation(accountId);
+        if (conversation == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "请先创建或上传正式简历");
+        if (careers.needsOnboarding(conversation)) {
+            careers.finishOnboarding(accountId);
+            turns.openLearning(conversation, "你好！我们可以先从通用知识开始，也可以一起探索适合你的方向。你最近对什么技术或问题感兴趣？", "[]");
+        }
+        return new CareerPlans.ExplorationState(Long.toString(conversation));
+    }
+
+    @Transactional
     public Claim claim(long accountId, String direction, long version) {
         expiredCredits.recover(accountId);
         if (careers.lockAccount(accountId) == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);

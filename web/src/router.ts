@@ -19,7 +19,6 @@ export const router = createRouter({
     { path: '/workspace/career/plan/:id', name: 'career-plan', component: () => import('./views/CareerResultView.vue'), meta: { title: '匹配与学习路线', role: 'STUDENT' } },
     { path: '/workspace/career/interview/:id', name: 'career-interview', component: () => import('./views/CareerResultView.vue'), meta: { title: '模拟面试准备', role: 'STUDENT' } },
     { path: '/workspace/career/skills/:id', name: 'career-skills', component: () => import('./views/SkillSessionView.vue'), meta: { title: '技能核验旁聊', role: 'STUDENT' } },
-    { path: '/workspace/memory', name: 'mentor-memory', component: () => import('./views/MentorMemoryView.vue'), meta: { title: 'Mentor 记忆库', role: 'STUDENT' } },
     { path: '/admin', redirect: { name: 'admin-users' } },
     { path: '/admin/users', name: 'admin-users', component: () => import('./views/AdminUsersView.vue'), meta: { title: '用户管理中心', role: 'ADMIN' } },
     { path: '/:pathMatch(.*)*', redirect: { name: 'login' } },
