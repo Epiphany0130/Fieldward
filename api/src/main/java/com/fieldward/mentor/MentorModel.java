@@ -30,6 +30,8 @@ class MentorModel {
             历史里 Mentor 的回答不是学生的自述，也不能作为经历已验证的依据。发现矛盾时标出版本或日期。
             扫描件 OCR 可能含错字，遇到不清楚的部分请学生核对原件。
             遇到资料不足、内容冲突或无法读取的文件，说清楚缺的是哪一项。需要澄清时问一个明确的问题。禁止编造经历。
+            如果工作台带入了学习计划，结合学生刚才的回答主动推进当前任务。先回应他做对了什么或遇到了什么困难，再给一个小练习或核验问题。
+            学生完成一项任务后可以引导到下一项。先解释下一步要做什么，避免把整条学习路线重复一遍。
             """;
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
@@ -67,13 +69,7 @@ class MentorModel {
         messages.addAll(conversation);
         var payload = Map.of("model", model, "stream", true, "max_completion_tokens", 1200,
                 "thinking", Map.of("type", "disabled"), "messages", messages);
-        var request = HttpRequest.newBuilder(endpoint)
-                .timeout(Duration.ofSeconds(55))
-                .header("api-key", apiKey)
-                .header("Content-Type", "application/json")
-                .header("Accept", "text/event-stream")
-                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(payload)))
-                .build();
+        var request = request(payload, Duration.ofSeconds(55), "text/event-stream");
         var response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
         try (var input = response.body();
              var reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
@@ -98,6 +94,30 @@ class MentorModel {
             }
             if (!finished) throw new IOException("Mentor provider ended without a completion event");
         }
+    }
+
+    tools.jackson.databind.JsonNode completeJson(String instructions, Object input) throws IOException, InterruptedException {
+        var messages = List.of(new Message("system", instructions), new Message("user", json.writeValueAsString(input)));
+        var payload = Map.of("model", model, "stream", false, "max_completion_tokens", 1500,
+                "thinking", Map.of("type", "disabled"), "response_format", Map.of("type", "json_object"), "messages", messages);
+        var response = http.send(request(payload, Duration.ofSeconds(40), "application/json"), HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) throw new IOException("Career assessment provider HTTP " + response.statusCode());
+        var choice = json.readTree(response.body()).path("choices").path(0);
+        var content = choice.path("message").path("content");
+        if (!content.isString() || "length".equals(choice.path("finish_reason").asString(""))) {
+            throw new IOException("Career assessment response is incomplete");
+        }
+        return json.readTree(content.asString());
+    }
+
+    private HttpRequest request(Map<String, ?> payload, Duration timeout, String accept) {
+        return HttpRequest.newBuilder(endpoint)
+                .timeout(timeout)
+                .header("api-key", apiKey)
+                .header("Content-Type", "application/json")
+                .header("Accept", accept)
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(payload)))
+                .build();
     }
 
     @PreDestroy

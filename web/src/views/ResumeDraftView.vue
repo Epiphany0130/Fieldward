@@ -243,7 +243,7 @@ async function writeResume(nextAction: 'save' | 'submit') {
       if (!base.value.submission || submission.version > base.value.submission.version) {
         base.value.submission = submission
       }
-      if (submission.version === 1) await router.replace({ name: 'workspace' })
+      if (submission.version === 1) await router.replace({ name: 'career-direction' })
     }
   } catch (error) {
     conflict.value = error instanceof ApiError && error.status === 409

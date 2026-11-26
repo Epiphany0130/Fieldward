@@ -100,6 +100,13 @@ interface MentorTurnMapper {
                      @Param("message") String message, @Param("leaseSeconds") int leaseSeconds);
 
     @Select(value = """
+            INSERT INTO mentor_turns (conversation_id, request_id, student_message, mentor_reply, status, attempt, sources)
+            VALUES (#{conversation}, gen_random_uuid(), NULL, #{opening}, 'COMPLETED', 1, CAST(#{sources} AS jsonb))
+            RETURNING id
+            """, affectData = true)
+    long openLearning(@Param("conversation") long conversation, @Param("opening") String opening, @Param("sources") String sources);
+
+    @Select(value = """
             UPDATE mentor_turns SET status = 'STREAMING', attempt = attempt + 1, updated_at = CURRENT_TIMESTAMP,
                 lease_until = CURRENT_TIMESTAMP + make_interval(secs => #{leaseSeconds})
             WHERE id = #{id} AND status = 'INTERRUPTED'

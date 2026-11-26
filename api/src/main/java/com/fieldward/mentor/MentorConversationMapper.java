@@ -17,7 +17,8 @@ public interface MentorConversationMapper {
     @Select("""
             SELECT CAST(conversation.id AS text) AS conversation_id, conversation.created_at,
                    latest.version AS latest_resume_version,
-                   COALESCE(latest.content -> 'profile' ->> 'name', upload.file_name) AS resume_name
+                   COALESCE(latest.content -> 'profile' ->> 'name', upload.file_name) AS resume_name,
+                   conversation.career_onboarding_required
             FROM mentor_main_conversations conversation
             CROSS JOIN LATERAL (
                 SELECT version, content, upload_request_id FROM resume_versions
@@ -30,5 +31,6 @@ public interface MentorConversationMapper {
             """)
     Workspace findWorkspace(long accountId);
 
-    record Workspace(String conversationId, OffsetDateTime createdAt, long latestResumeVersion, String resumeName) {}
+    record Workspace(String conversationId, OffsetDateTime createdAt, long latestResumeVersion, String resumeName,
+                     boolean careerOnboardingRequired) {}
 }

@@ -151,7 +151,7 @@ function onEnter(event: KeyboardEvent) {
 }
 
 function retry(turn: MentorTurn) {
-  void send({ requestId: turn.requestId, content: turn.studentMessage })
+  if (turn.studentMessage !== null) void send({ requestId: turn.requestId, content: turn.studentMessage })
 }
 
 function resumeEditing() {
@@ -199,7 +199,7 @@ onBeforeUnmount(() => {
       </div>
       <ol v-if="turns.length || pending" class="turns">
         <li v-for="turn in turns" :key="turn.requestId" class="turn">
-          <article class="bubble user-bubble" aria-label="你的消息">
+          <article v-if="turn.studentMessage !== null" class="bubble user-bubble" aria-label="你的消息">
             <p>{{ turn.studentMessage }}</p>
           </article>
           <article v-if="turn.status === 'COMPLETED'" class="bubble mentor-bubble" aria-label="Mentor 回复">

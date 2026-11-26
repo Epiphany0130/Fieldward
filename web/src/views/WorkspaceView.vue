@@ -5,17 +5,23 @@ import { ApiError, api, errorMessage } from '../api'
 import { account, forgetSession } from '../session'
 import MentorChat from '../components/MentorChat.vue'
 import type { SideChat } from '../mentor'
+import type { CareerAssessment } from '../career'
 
 interface Workspace {
   conversationId: string
   createdAt: string
   latestResumeVersion: number
   resumeName: string | null
+  careerOnboardingRequired: boolean
 }
 
 const router = useRouter()
 const route = useRoute()
 const workspace = ref<Workspace>()
+const career = ref<CareerAssessment | null>(null)
+const report = computed(() => career.value?.report)
+const interviewReady = computed(() => report.value?.stage === 'INTERVIEW_READY')
+const firstStep = computed(() => report.value?.roadmap[0])
 const loading = ref(true)
 const message = ref('')
 const sides = ref<SideChat[]>([])
@@ -35,14 +41,19 @@ async function loadWorkspace() {
   loading.value = true
   message.value = ''
   try {
-    const state = await api<{ accountId: string; workspace: Workspace | null }>('/workspace')
+    const state = await api<{ accountId: string; workspace: Workspace | null; career: CareerAssessment | null }>('/workspace')
     if (!active) return
     if (state.accountId !== account.value?.id) throw new ApiError(403, '登录账号已变更，请刷新页面。')
     if (!state.workspace) {
       await router.replace({ name: 'resume-draft' })
       return
     }
+    if (state.workspace.careerOnboardingRequired && state.career?.status !== 'READY') {
+      await router.replace({ name: 'career-direction' })
+      return
+    }
     workspace.value = state.workspace
+    career.value = state.career
     const channels = await api<{ accountId: string; sides: SideChat[] }>('/mentor/side-chats')
     if (!active) return
     if (channels.accountId !== account.value?.id) throw new ApiError(403, '登录账号已变更，请刷新页面。')
@@ -91,6 +102,30 @@ onBeforeUnmount(() => { active = false })
 
     <template v-else-if="workspace">
       <h1>学生工作台</h1>
+      <section v-if="career && report" class="surface fit-banner" aria-labelledby="fit-heading">
+        <div>
+          <h2 id="fit-heading">{{ career.directionTitle }}</h2>
+          <p v-if="report.matchPercent !== null">岗位方向匹配度 <strong>{{ report.matchPercent }}%</strong></p>
+          <p v-else>简历暂未评分 · 已生成基础计划</p>
+        </div>
+        <div class="fit-next">
+          <strong v-if="interviewReady">已进入模拟面试准备</strong>
+          <template v-else-if="firstStep">
+            <strong>首个学习任务 · {{ firstStep.title }}</strong>
+            <p>{{ firstStep.task }}</p>
+          </template>
+          <p v-if="career.resumeVersion !== workspace.latestResumeVersion">
+            当前计划依据第 {{ career.resumeVersion }} 版简历。
+          </p>
+        </div>
+        <div class="workspace-links">
+          <RouterLink class="button button-primary"
+                      :to="{ name: interviewReady ? 'career-interview' : 'career-plan', params: { id: career.id } }">
+            {{ interviewReady ? '查看面试准备' : '查看匹配与学习路线' }}
+          </RouterLink>
+          <RouterLink class="button button-quiet" :to="{ name: 'career-direction', query: { change: '1' } }">更换方向或重评</RouterLink>
+        </div>
+      </section>
       <div class="workspace-layout">
         <section class="surface conversation" aria-labelledby="conversation-title">
           <header class="conversation-header">
@@ -120,6 +155,8 @@ onBeforeUnmount(() => { active = false })
             <RouterLink class="button button-primary"
                         :to="{ name: 'resume-final', query: { version: String(workspace.latestResumeVersion) } }">查看成稿</RouterLink>
             <RouterLink class="button button-quiet" :to="{ name: 'mentor-memory' }">打开 Mentor 记忆库</RouterLink>
+            <RouterLink v-if="!report" class="button button-quiet"
+                        :to="{ name: 'career-direction', query: { change: '1' } }">选择求职方向</RouterLink>
           </div>
           <section class="side-chats" aria-labelledby="side-heading">
             <h2 id="side-heading">对话</h2>
@@ -144,6 +181,9 @@ onBeforeUnmount(() => { active = false })
 <style scoped>
 .workspace-page { width: min(100% - 2rem, 71rem); }
 .workspace-page h1 { margin-bottom: 1.15rem; }
+.fit-banner { display: grid; grid-template-columns: auto minmax(12rem, 1fr) auto; gap: .75rem 1.25rem; align-items: center; padding: .9rem 1rem; margin-bottom: 1rem; }
+.fit-banner h2 { font-size: 1.1rem; }
+.fit-banner p { margin-top: .25rem; color: var(--muted); line-height: 1.5; }
 .workspace-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, .38fr); gap: 1rem; align-items: start; }
 .conversation { min-width: 0; min-height: 21rem; }
 .conversation-header { display: flex; align-items: center; gap: .75rem; padding: 1rem; border-bottom: 1px solid #dde6dc; }
@@ -169,7 +209,7 @@ onBeforeUnmount(() => { active = false })
 .workspace-feedback .button { margin-top: .7rem; }
 
 @media (max-width: 680px) {
-  .workspace-layout { grid-template-columns: minmax(0, 1fr); }
+  .workspace-layout, .fit-banner { grid-template-columns: minmax(0, 1fr); }
   .conversation { min-height: 14rem; }
 }
 </style>

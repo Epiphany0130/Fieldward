@@ -18,10 +18,12 @@ class MentorTurns {
     private static final int CONTEXT_BUDGET = 56_000;
     private final MentorTurnMapper mapper;
     private final MentorMemory memory;
+    private final CareerPlans careers;
 
-    MentorTurns(MentorTurnMapper mapper, MentorMemory memory) {
+    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers) {
         this.mapper = mapper;
         this.memory = memory;
+        this.careers = careers;
     }
 
     History history(long accountId, Long side, Long before, String watch, boolean available) {
@@ -44,10 +46,13 @@ class MentorTurns {
         }
         long conversation = requireConversation(mapper.lockConversation(accountId));
         requireSide(conversation, side);
+        if (careers.needsOnboarding(conversation)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "请先选择职业方向并完成简历匹配分析");
+        }
         mapper.expire(conversation, side);
         var previous = mapper.find(conversation, side, requestId);
         if (previous != null) {
-            if (!previous.studentMessage().equals(message)) {
+            if (!message.equals(previous.studentMessage())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "该消息编号已用于其他内容");
             }
             if (previous.status() == MentorTurnMapper.Status.COMPLETED) return previous;
@@ -75,14 +80,17 @@ class MentorTurns {
         var recent = new HashSet<Long>();
         int remaining = CONTEXT_BUDGET - turn.studentMessage().length();
         for (var completed : mapper.context(turn.conversationId(), turn.sideChatId(), turn.id())) {
-            int length = completed.mentorReply().length() + completed.studentMessage().length();
+            String student = completed.studentMessage();
+            int length = completed.mentorReply().length() + (student == null ? 0 : student.length());
             if (length > remaining) break;
             prior.add(new MentorModel.Message("assistant", completed.mentorReply()));
-            prior.add(new MentorModel.Message("user", completed.studentMessage()));
+            if (student != null) prior.add(new MentorModel.Message("user", student));
             recent.add(completed.id());
             remaining -= length;
         }
         var messages = new ArrayList<>(prior.reversed());
+        var guidance = careers.guidance(turn.conversationId());
+        if (!guidance.isBlank()) messages.add(new MentorModel.Message("user", guidance));
         var context = memory.retrieve(turn, recent);
         messages.add(new MentorModel.Message("user", context.prompt()));
         messages.add(new MentorModel.Message("user", turn.studentMessage()));

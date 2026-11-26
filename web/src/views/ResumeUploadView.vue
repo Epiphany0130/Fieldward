@@ -67,8 +67,8 @@ async function upload() {
   pending.value = true
   message.value = ''
   try {
-    await api<ResumeSubmission>('/resume/upload', 'POST', form)
-    if (active) await router.replace({ name: 'workspace' })
+    const result = await api<ResumeSubmission>('/resume/upload', 'POST', form)
+    if (active) await router.replace({ name: result.version === 1 ? 'career-direction' : 'workspace' })
   } catch (error) {
     if (!active) return
     if (error instanceof ApiError && error.status === 401) {
@@ -92,7 +92,8 @@ onBeforeUnmount(() => { active = false })
         {{ fromWorkspace ? '返回工作台' : '返回简历制作' }}
       </RouterLink>
       <h1>{{ fromWorkspace ? '上传新版本' : '上传已有简历' }}</h1>
-      <p>将文件保存为正式简历版本，上传后可在工作台查看和下载原件。</p>
+      <p v-if="fromWorkspace">将文件保存为新简历版本，工作台可按新版重新分析。</p>
+      <p v-else>首次上传成功后，可以选择求职方向并分析简历匹配度。</p>
     </header>
 
     <form class="surface upload-form" :aria-busy="pending" @submit.prevent="upload">

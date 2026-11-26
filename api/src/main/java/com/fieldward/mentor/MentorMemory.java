@@ -132,9 +132,10 @@ class MentorMemory {
         for (var item : turns.recall(conversation, turn.sideChatId(), turn.id(), query)) {
             if (recentIds.contains(item.id())) continue;
             String title = item.title() == null ? "主对话" : "旁聊「" + item.title() + "」";
-            String passage = "学生原话：" + MentorSearch.excerpt(item.studentMessage(), turn.studentMessage(), 850);
+            String passage = item.studentMessage() == null ? ""
+                    : "学生原话：" + MentorSearch.excerpt(item.studentMessage(), turn.studentMessage(), 850) + "\n";
             if (item.mentorReply() != null) {
-                passage += "\n当时 Mentor 的回答（历史回答，仅供参考）："
+                passage += "Mentor 的历史发言（仅供参考）："
                         + MentorSearch.excerpt(item.mentorReply(), turn.studentMessage(), 650);
             }
             add(citations, excerpts, title + " · " + item.createdAt() + " · 消息 #" + item.id(), null, passage);

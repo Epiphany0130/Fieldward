@@ -3,7 +3,7 @@ import { ApiError, requestApi } from './api'
 export interface MentorTurn {
   id: string
   requestId: string
-  studentMessage: string
+  studentMessage: string | null
   mentorReply: string | null
   status: 'STREAMING' | 'COMPLETED' | 'INTERRUPTED'
   createdAt: string
