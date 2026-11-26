@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { ApiError, api, errorMessage } from '../api'
 import { streamMentor, type MentorHistory, type MentorTurn, type StudentMessage } from '../mentor'
+import MentorMarkdown from './MentorMarkdown.vue'
 
 const props = defineProps<{ accountId: string; sideId: string | null }>()
 const emit = defineEmits<{ expired: [] }>()
@@ -24,7 +25,6 @@ const thread = ref<HTMLElement>()
 const compose = ref<HTMLTextAreaElement>()
 const busy = computed(() => Boolean(active.value || aborter.value))
 const canSend = computed(() => ready.value && available.value && !busy.value && !syncing.value && !pending.value && draft.value.trim())
-const timeFormat = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 let poll: number | undefined
 let unmounted = false
 
@@ -144,6 +144,12 @@ function submit() {
   void send({ requestId, content })
 }
 
+function onEnter(event: KeyboardEvent) {
+  if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  if (!event.repeat) submit()
+}
+
 function retry(turn: MentorTurn) {
   void send({ requestId: turn.requestId, content: turn.studentMessage })
 }
@@ -193,13 +199,11 @@ onBeforeUnmount(() => {
       </div>
       <ol v-if="turns.length || pending" class="turns">
         <li v-for="turn in turns" :key="turn.requestId" class="turn">
-          <article class="bubble user-bubble">
-            <header><strong>你</strong><time :datetime="turn.createdAt">{{ timeFormat.format(new Date(turn.createdAt)) }}</time></header>
+          <article class="bubble user-bubble" aria-label="你的消息">
             <p>{{ turn.studentMessage }}</p>
           </article>
-          <article v-if="turn.status === 'COMPLETED'" class="bubble mentor-bubble">
-            <header><strong>Mentor</strong></header>
-            <p>{{ turn.mentorReply }}</p>
+          <article v-if="turn.status === 'COMPLETED'" class="bubble mentor-bubble" aria-label="Mentor 回复">
+            <MentorMarkdown :content="turn.mentorReply ?? ''" />
             <details v-if="turn.sources?.length" class="mentor-sources">
               <summary>查看本轮资料来源（{{ turn.sources.length }}）</summary>
               <ol>
@@ -212,9 +216,8 @@ onBeforeUnmount(() => {
               </ol>
             </details>
           </article>
-          <article v-else-if="turn.status === 'STREAMING'" class="bubble mentor-bubble">
-            <header><strong>Mentor</strong><span>正在回复</span></header>
-            <p v-if="turn.requestId === currentRequest && partial">{{ partial }}</p>
+          <article v-else-if="turn.status === 'STREAMING'" class="bubble mentor-bubble" aria-label="Mentor 正在回复">
+            <MentorMarkdown v-if="turn.requestId === currentRequest && partial" :content="partial" />
             <p v-else class="muted">正在生成回复…</p>
           </article>
           <div v-else class="turn-feedback">
@@ -223,8 +226,7 @@ onBeforeUnmount(() => {
           </div>
         </li>
         <li v-if="pending" class="turn">
-          <article class="bubble user-bubble">
-            <header><strong>你</strong><span>{{ aborter ? '正在发送' : '待确认发送' }}</span></header>
+          <article class="bubble user-bubble" :aria-label="aborter ? '正在发送的消息' : '待确认发送的消息'">
             <p>{{ pending.content }}</p>
           </article>
           <div v-if="!aborter" class="turn-feedback">
@@ -242,7 +244,7 @@ onBeforeUnmount(() => {
     <form class="composer" @submit.prevent="submit">
       <label class="field">
         <span>给 Mentor 发消息</span>
-        <textarea ref="compose" v-model="draft" rows="3" maxlength="4000"
+        <textarea ref="compose" v-model="draft" rows="3" maxlength="4000" @keydown.enter="onEnter"
                   :disabled="!ready || !available || Boolean(pending)" placeholder="例如：我想准备 Java 后端实习，应该从哪开始？" />
       </label>
       <div class="composer-actions">
@@ -268,9 +270,7 @@ onBeforeUnmount(() => {
 .turns { display: grid; gap: 1.15rem; margin: 0; padding: 0; list-style: none; }
 .turn { display: grid; gap: .65rem; min-width: 0; }
 .bubble { min-width: 0; max-width: min(100%, 44rem); padding: .65rem .8rem; border-radius: .65rem; overflow-wrap: anywhere; }
-.bubble header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .6rem; margin-bottom: .25rem; }
-.bubble header :is(time, span) { color: var(--muted); font-size: .76rem; }
-.bubble p { white-space: pre-wrap; line-height: 1.65; }
+.user-bubble p, .mentor-sources p { white-space: pre-wrap; line-height: 1.65; }
 .user-bubble { justify-self: end; background: #e6eee3; border: 1px solid #d6e1d4; }
 .mentor-bubble { justify-self: start; background: #f6f7f2; border: 1px solid #dfe6dc; }
 .mentor-sources { margin-top: .65rem; padding-top: .55rem; border-top: 1px solid var(--outline); font-size: .85rem; }
