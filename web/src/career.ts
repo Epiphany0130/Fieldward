@@ -31,6 +31,8 @@ export interface CareerReport {
   sourceQuality: 'READABLE' | 'OCR' | 'UNREADABLE'
   skills: CareerSkill[]
   roadmap: CareerStep[]
+  route: { sourceUrl: string; phases: { title: string; topics: string[] }[] } | null
+  topicSuggestions: Record<string, { mark: SkillMark; quote: string; basis: string }> | null
 }
 
 export interface CareerAssessment {
@@ -51,4 +53,40 @@ export interface CareerState {
   current: CareerAssessment | null
   directions: CareerOption[]
   referenceUrl: string
+}
+
+export type SkillMark = 'GREEN' | 'YELLOW' | 'RED'
+
+export const selfMarkLabels: Record<SkillMark, string> = {
+  GREEN: '会',
+  YELLOW: '接触过',
+  RED: '不会',
+}
+
+export const testedMarkLabels: Record<SkillMark, string> = {
+  GREEN: '已掌握',
+  YELLOW: '部分掌握',
+  RED: '需补学',
+}
+
+export interface SkillGrade {
+  topic: string
+  mark: SkillMark
+  score: number
+  feedback: string
+}
+
+export interface SkillSession {
+  assessmentId: string
+  sideId: string
+  revision: number
+  phase: 'PREPARING' | 'TEST' | 'REPORT' | 'LEARNING' | 'DONE'
+  selfMarks: Record<string, SkillMark>
+  marks: Record<string, SkillMark>
+  grades: SkillGrade[]
+  currentTopic: string | null
+  question: string | null
+  testCount: number
+  studyTopics: string[]
+  lessonIndex: number
 }

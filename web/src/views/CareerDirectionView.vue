@@ -32,11 +32,7 @@ async function showError(error: unknown) {
 }
 
 async function openResult(assessment: CareerAssessment) {
-  if (assessment.report?.stage === 'INTERVIEW_READY') {
-    await router.replace({ name: 'career-interview', params: { id: assessment.id } })
-  } else {
-    await router.replace({ name: 'workspace' })
-  }
+  await router.replace({ name: 'career-plan', params: { id: assessment.id } })
 }
 
 async function refresh(followResult: boolean) {

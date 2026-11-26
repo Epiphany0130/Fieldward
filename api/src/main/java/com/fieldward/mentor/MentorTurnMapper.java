@@ -30,8 +30,11 @@ interface MentorTurnMapper {
     Long lockConversation(long accountId);
 
     @Select("""
-            SELECT id::text AS id, title FROM mentor_side_chats
-            WHERE conversation_id = #{conversation} ORDER BY id DESC
+            SELECT side.id::text AS id, side.title, session.assessment_id::text AS verification_id
+            FROM mentor_side_chats side
+            LEFT JOIN career_skill_sessions session ON session.conversation_id = side.conversation_id
+                AND session.side_chat_id = side.id
+            WHERE side.conversation_id = #{conversation} ORDER BY side.id DESC
             """)
     List<Side> sides(long conversation);
 
@@ -47,9 +50,27 @@ interface MentorTurnMapper {
     void createSide(@Param("conversation") long conversation, @Param("title") String title);
 
     @Select("""
-            SELECT id::text AS id, title FROM mentor_side_chats WHERE conversation_id = #{conversation} AND title = #{title}
+            SELECT side.id::text AS id, side.title, session.assessment_id::text AS verification_id
+            FROM mentor_side_chats side
+            LEFT JOIN career_skill_sessions session ON session.conversation_id = side.conversation_id
+                AND session.side_chat_id = side.id
+            WHERE side.conversation_id = #{conversation} AND side.title = #{title}
             """)
     Side sideByTitle(@Param("conversation") long conversation, @Param("title") String title);
+
+    @Select(value = """
+            INSERT INTO mentor_side_chats (conversation_id, title) VALUES (#{conversation}, #{title})
+            RETURNING id
+            """, affectData = true)
+    long createDedicatedSide(@Param("conversation") long conversation, @Param("title") String title);
+
+    @Select(value = """
+            INSERT INTO mentor_turns (conversation_id, side_chat_id, request_id, student_message, mentor_reply, status, attempt)
+            VALUES (#{conversation}, #{side}, gen_random_uuid(), #{message}, #{reply}, 'COMPLETED', 1)
+            RETURNING
+            """ + STORED, affectData = true)
+    StoredTurn logSideTurn(@Param("conversation") long conversation, @Param("side") long side,
+                           @Param("message") String message, @Param("reply") String reply);
 
     @Select("SELECT " + READABLE + """
             FROM mentor_turns WHERE conversation_id = #{conversation}
@@ -185,7 +206,7 @@ interface MentorTurnMapper {
     record TurnView(String id, String requestId, String studentMessage, String mentorReply,
                     Status status, OffsetDateTime createdAt, List<MentorMemory.Source> sources) {}
 
-    record Side(String id, String title) {}
+    record Side(String id, String title, String verificationId) {}
 
     record Recall(long id, Long sideChatId, String title, String studentMessage, String mentorReply,
                   OffsetDateTime createdAt) {}

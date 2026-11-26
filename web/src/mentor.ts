@@ -20,6 +20,7 @@ export interface MentorSource {
 export interface SideChat {
   id: string
   title: string
+  verificationId: string | null
 }
 
 export interface MemoryNote {

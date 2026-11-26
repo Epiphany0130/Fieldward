@@ -28,7 +28,7 @@ const sides = ref<SideChat[]>([])
 const sideTitle = ref('')
 const sideError = ref('')
 const creatingSide = ref(false)
-const selectedSide = computed(() => sides.value.find(({ id }) => id === route.query.side))
+const selectedSide = computed(() => sides.value.find(side => side.id === route.query.side && !side.verificationId))
 const dateFormat = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'long' })
 let active = true
 
@@ -109,7 +109,8 @@ onBeforeUnmount(() => { active = false })
           <p v-else>简历暂未评分 · 已生成基础计划</p>
         </div>
         <div class="fit-next">
-          <strong v-if="interviewReady">已进入模拟面试准备</strong>
+          <strong v-if="report.route">先确认路线上的技能，再由 Mentor 核验和带学</strong>
+          <strong v-else-if="interviewReady">已进入模拟面试准备</strong>
           <template v-else-if="firstStep">
             <strong>首个学习任务 · {{ firstStep.title }}</strong>
             <p>{{ firstStep.task }}</p>
@@ -120,8 +121,8 @@ onBeforeUnmount(() => { active = false })
         </div>
         <div class="workspace-links">
           <RouterLink class="button button-primary"
-                      :to="{ name: interviewReady ? 'career-interview' : 'career-plan', params: { id: career.id } }">
-            {{ interviewReady ? '查看面试准备' : '查看匹配与学习路线' }}
+                      :to="{ name: !report.route && interviewReady ? 'career-interview' : 'career-plan', params: { id: career.id } }">
+            {{ !report.route && interviewReady ? '查看面试准备' : '查看匹配与学习路线' }}
           </RouterLink>
           <RouterLink class="button button-quiet" :to="{ name: 'career-direction', query: { change: '1' } }">更换方向或重评</RouterLink>
           <RouterLink v-if="career.needsReanalysis" class="button button-quiet"
@@ -164,8 +165,10 @@ onBeforeUnmount(() => { active = false })
             <h2 id="side-heading">对话</h2>
             <nav aria-label="切换 Mentor 对话">
               <RouterLink :to="{ name: 'workspace' }" :aria-current="selectedSide ? undefined : 'page'">主对话</RouterLink>
-              <RouterLink v-for="side in sides" :key="side.id" :to="{ name: 'workspace', query: { side: side.id } }"
-                          :aria-current="selectedSide?.id === side.id ? 'page' : undefined">{{ side.title }}</RouterLink>
+              <RouterLink v-for="side in sides" :key="side.id" :to="side.verificationId ? { name: 'career-skills', params: { id: side.verificationId } } : { name: 'workspace', query: { side: side.id } }"
+                          :aria-current="selectedSide?.id === side.id ? 'page' : undefined">
+                {{ side.verificationId ? side.title.slice(0, side.title.lastIndexOf(' · ')) : side.title }}
+              </RouterLink>
             </nav>
             <form class="side-form" @submit.prevent="createSide">
               <label for="side-title">新建旁聊</label>

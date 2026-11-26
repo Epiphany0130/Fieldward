@@ -71,7 +71,7 @@ class CareerWrites {
     }
 
     @Transactional
-    public void finish(Claim claim, CareerCatalog.Direction direction, CareerFit.Report report) {
+    public void finish(Claim claim, CareerFit.Report report) {
         var assessment = claim.assessment();
         if (careers.lockAccount(assessment.accountId()) == null) return;
         if (careers.settle(assessment, "READY", json.writeValueAsString(report)) == 0) return;
@@ -81,31 +81,13 @@ class CareerWrites {
         if (active == null || active.id() != assessment.id() || workspace == null
                 || workspace.latestResumeVersion() != assessment.resumeVersion()) return;
         careers.finishOnboarding(assessment.accountId());
-        long conversation = Long.parseLong(workspace.conversationId());
         if (claim.earlierReport() != null) {
             turns.lockConversation(assessment.accountId());
-            var updated = opening(assessment.id(), direction, report);
-            if (turns.reviseUnansweredOpening(conversation, planPath(claim.earlierReport()), updated.text(), updated.sources()) != 0
-                    || !turns.history(conversation, null, null, 1).isEmpty()) return;
+            turns.reviseUnansweredOpening(Long.parseLong(workspace.conversationId()),
+                    planPath(claim.earlierReport()), "我们先在学习路线核对技能，再逐项练习。",
+                    json.writeValueAsString(List.of(new MentorMemory.Source("S1", "本次职业匹配与学习路线",
+                            planPath(assessment.id()), "确认技术栈后开始核验"))));
         }
-        if (report.stage() == CareerFit.Stage.LEARNING) {
-            var opening = opening(assessment.id(), direction, report);
-            turns.openLearning(conversation, opening.text(), opening.sources());
-        }
-    }
-
-    private Opening opening(long assessment, CareerCatalog.Direction direction, CareerFit.Report report) {
-        if (report.stage() == CareerFit.Stage.INTERVIEW_READY) {
-            return new Opening("根据简历证据和已掌握的前置技能，你已达到面试准备标准。可以在工作台查看准备页。",
-                    json.writeValueAsString(List.of(new MentorMemory.Source("S1", "本次职业匹配与面试准备",
-                            "/workspace/career/interview/" + assessment, "匹配度 " + report.matchPercent() + "%"))));
-        }
-        var first = report.roadmap().getFirst();
-        var skill = direction.skills().stream().filter(item -> item.id().equals(first.skillId())).findFirst().orElseThrow();
-        String message = "我们先从 **" + first.title() + "** 开始。\n\n" + skill.question();
-        var sources = List.of(new MentorMemory.Source("S1", "本次职业匹配与学习计划", planPath(assessment),
-                first.objective() + "\n" + first.task()));
-        return new Opening(message, json.writeValueAsString(sources));
     }
 
     private String planPath(long assessment) {
@@ -127,5 +109,4 @@ class CareerWrites {
     }
 
     record Claim(CareerMapper.Assessment assessment, CareerFit.Input input, boolean start, Long earlierReport) {}
-    private record Opening(String text, String sources) {}
 }

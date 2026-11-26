@@ -19,11 +19,13 @@ class MentorTurns {
     private final MentorTurnMapper mapper;
     private final MentorMemory memory;
     private final CareerPlans careers;
+    private final SkillSessions skills;
 
-    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers) {
+    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers, SkillSessions skills) {
         this.mapper = mapper;
         this.memory = memory;
         this.careers = careers;
+        this.skills = skills;
     }
 
     History history(long accountId, Long side, Long before, String watch, boolean available) {
@@ -48,6 +50,9 @@ class MentorTurns {
         requireSide(conversation, side);
         if (careers.needsOnboarding(conversation)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "请先选择职业方向并完成简历匹配分析");
+        }
+        if (skills.testing(conversation, side)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "请在技能核验旁聊提交作答或开始带学");
         }
         mapper.expire(conversation, side);
         var previous = mapper.find(conversation, side, requestId);
@@ -89,7 +94,10 @@ class MentorTurns {
             remaining -= length;
         }
         var messages = new ArrayList<>(prior.reversed());
-        var guidance = careers.guidance(turn.conversationId());
+        var guidance = skills.guidance(turn.conversationId(), turn.sideChatId());
+        if (guidance.isBlank()) {
+            guidance = careers.guidance(turn.conversationId()) + "\n" + skills.overview(turn.conversationId());
+        }
         if (!guidance.isBlank()) messages.add(new MentorModel.Message("user", guidance));
         var context = memory.retrieve(turn, recent);
         messages.add(new MentorModel.Message("user", context.prompt()));

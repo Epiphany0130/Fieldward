@@ -8,11 +8,15 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
@@ -96,18 +100,38 @@ class MentorModel {
         }
     }
 
-    tools.jackson.databind.JsonNode completeJson(String instructions, Object input) throws IOException, InterruptedException {
-        var messages = List.of(new Message("system", instructions), new Message("user", json.writeValueAsString(input)));
-        var payload = Map.of("model", model, "stream", false, "max_completion_tokens", 2800,
-                "thinking", Map.of("type", "disabled"), "response_format", Map.of("type", "json_object"), "messages", messages);
-        var response = http.send(request(payload, Duration.ofSeconds(40), "application/json"), HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) throw new IOException("Career assessment provider HTTP " + response.statusCode());
+    tools.jackson.databind.JsonNode completeJson(String instructions, Object input, int maxTokens, Duration timeout)
+            throws IOException, InterruptedException {
+        var messages = List.of(new Message("system", instructions + "\n输出紧凑的 JSON，闭合对象后立即结束。"),
+                new Message("user", json.writeValueAsString(input)));
+        var payload = Map.of("model", model, "stream", false, "max_completion_tokens", maxTokens,
+                "temperature", 0.2, "thinking", Map.of("type", "disabled"),
+                "response_format", Map.of("type", "json_object"), "messages", messages);
+        var pending = http.sendAsync(request(payload, timeout, "application/json"), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response;
+        try {
+            response = pending.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException exception) {
+            throw new HttpTimeoutException("Mentor model response timed out");
+        } catch (ExecutionException exception) {
+            throw new IOException("Mentor model request failed", exception.getCause());
+        } finally {
+            if (!pending.isDone()) pending.cancel(true);
+        }
+        if (response.statusCode() != 200) throw new IOException("Mentor model provider HTTP " + response.statusCode());
         var choice = json.readTree(response.body()).path("choices").path(0);
         var content = choice.path("message").path("content");
-        if (!content.isString() || "length".equals(choice.path("finish_reason").asString(""))) {
-            throw new IOException("Career assessment response is incomplete");
+        String finish = choice.path("finish_reason").asString("");
+        if (!content.isString() || content.asString().isBlank()) {
+            throw new IOException("Mentor model response has no content (finish " + finish + ")");
         }
-        return json.readTree(content.asString());
+        try {
+            var result = json.readTree(content.asString());
+            if (!result.isObject()) throw new IOException("Mentor model response must be a JSON object");
+            return result;
+        } catch (tools.jackson.core.JacksonException exception) {
+            throw new IOException("Mentor model response is invalid JSON (finish " + finish + ")", exception);
+        }
     }
 
     private HttpRequest request(Map<String, ?> payload, Duration timeout, String accept) {

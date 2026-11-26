@@ -4,7 +4,7 @@ import { ApiError, api, errorMessage } from '../api'
 import { streamMentor, type MentorHistory, type MentorTurn, type StudentMessage } from '../mentor'
 import MentorMarkdown from './MentorMarkdown.vue'
 
-const props = defineProps<{ accountId: string; sideId: string | null }>()
+const props = defineProps<{ accountId: string; sideId: string | null; readOnly?: boolean }>()
 const emit = defineEmits<{ expired: [] }>()
 const turns = ref<MentorTurn[]>([])
 const loading = ref(true)
@@ -190,7 +190,7 @@ onBeforeUnmount(() => {
               :disabled="loadingEarlier || busy || syncing" @click="syncHistory(undefined, nextBefore)">
         {{ loadingEarlier ? '加载中…' : '加载较早消息' }}
       </button>
-      <div v-if="ready && !turns.length && !pending" class="thread-empty">
+      <div v-if="!readOnly && ready && !turns.length && !pending" class="thread-empty">
         <h3>想从哪里开始？</h3>
         <p v-if="sideId">在这里深入讨论一个话题。明确的求职目标、经历和偏好会沉淀到共享记忆。</p>
         <template v-else>
@@ -241,7 +241,7 @@ onBeforeUnmount(() => {
       <button v-if="!busy" type="button" class="button button-quiet" @click="reloadHistory">重新加载对话</button>
     </div>
     <p v-if="ready && !available" class="notice chat-notice setup-notice" role="status">当前环境尚未配置 Mentor 模型，可以查看已有对话。</p>
-    <form class="composer" @submit.prevent="submit">
+    <form v-if="!readOnly" class="composer" @submit.prevent="submit">
       <label class="field">
         <span>给 Mentor 发消息</span>
         <textarea ref="compose" v-model="draft" rows="3" maxlength="4000" @keydown.enter="onEnter"

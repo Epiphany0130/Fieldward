@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError, api, errorMessage } from '../api'
-import type { CareerAssessment, CareerSkill } from '../career'
+import type { CareerAssessment, CareerSkill, SkillSession } from '../career'
+import SkillRoadmap from '../components/SkillRoadmap.vue'
 import { forgetSession } from '../session'
 
 const labels: Record<CareerSkill['level'], string> = {
@@ -16,8 +17,9 @@ const labels: Record<CareerSkill['level'], string> = {
 const route = useRoute()
 const router = useRouter()
 const assessment = ref<CareerAssessment>()
+const session = ref<SkillSession>()
 const report = computed(() => assessment.value?.report)
-const interview = computed(() => report.value?.stage === 'INTERVIEW_READY')
+const interview = computed(() => !report.value?.route && report.value?.stage === 'INTERVIEW_READY')
 const loading = ref(false)
 const message = ref('')
 let request = 0
@@ -28,6 +30,7 @@ async function load() {
   loading.value = true
   message.value = ''
   assessment.value = undefined
+  session.value = undefined
   try {
     if (typeof id !== 'string' || !/^[1-9][0-9]*$/.test(id)) throw new ApiError(400, '分析编号无效。')
     const result = await api<CareerAssessment>(`/career/assessment/${encodeURIComponent(id)}`)
@@ -35,6 +38,11 @@ async function load() {
     if (!result.report) {
       await router.replace({ name: 'career-direction' })
       return
+    }
+    if (result.report.route) {
+      const saved = await api<SkillSession | undefined>(`/career/assessment/${id}/skills`)
+      if (generation !== request) return
+      session.value = saved
     }
     assessment.value = result
   } catch (error) {
@@ -69,7 +77,7 @@ onBeforeUnmount(() => { request++ })
           <p>{{ assessment.directionTitle }}</p>
           <h1>{{ interview ? '模拟面试准备' : '匹配分析与学习路线' }}</h1>
           <p v-if="interview">匹配度和核心技能已达到面试准备标准。</p>
-          <p v-else>从待补的技能开始，每一步都有一个可以交给 Mentor 核对的小任务。</p>
+          <p v-else-if="!report.route">从待补的技能开始，每一步都有一个可以交给 Mentor 核对的小任务。</p>
         </div>
         <div class="result-actions">
           <RouterLink v-if="assessment.needsReanalysis" class="button button-primary"
@@ -91,12 +99,16 @@ onBeforeUnmount(() => { request++ })
             查看本次分析使用的简历第 {{ assessment.resumeVersion }} 版
           </RouterLink>
           <p v-if="report.sourceQuality === 'UNREADABLE'">当前原件无可读正文，已提供基础学习路线。可以补交清晰或带文本的简历后重评。</p>
+          <p v-else-if="report.route">这是简历初评。逐项核验会更新技术状态，并给出带学顺序。</p>
           <p v-else>直接实践和推断已掌握的前置技能计全分，仅提及计半分。达到 {{ report.interviewThreshold }}% 且核心技能已覆盖时进入面试准备。</p>
           <p v-if="report.sourceQuality === 'OCR'">分析参考扫描件识别文本，引用可与原件核对。</p>
         </div>
       </section>
 
-      <div class="result-grid">
+      <SkillRoadmap v-if="report.route" :key="assessment.id" :assessment-id="assessment.id"
+                    :route="report.route" :suggestions="report.topicSuggestions" :session="session" />
+
+      <div v-else class="result-grid">
         <section class="surface result-panel" aria-labelledby="skills-heading">
           <h2 id="skills-heading">技术栈与证据</h2>
           <ul class="skills">
