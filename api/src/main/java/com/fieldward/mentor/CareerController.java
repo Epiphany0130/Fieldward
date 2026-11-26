@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,14 +21,28 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/career")
 class CareerController {
     private final CareerPlans plans;
+    private final CapabilityService capabilities;
 
-    CareerController(CareerPlans plans) {
+    CareerController(CareerPlans plans, CapabilityService capabilities) {
+        this.capabilities = capabilities;
         this.plans = plans;
     }
 
     @GetMapping
     CareerPlans.State get(@AuthenticationPrincipal AccountPrincipal student) {
         return plans.state(student.accountId());
+    }
+
+    @GetMapping("/directions/{directionId}/route")
+    CapabilityService.RouteSnapshot route(@AuthenticationPrincipal AccountPrincipal student,
+                                           @PathVariable String directionId) {
+        return capabilities.currentRoute(student.accountId(), directionId);
+    }
+
+    @GetMapping("/capabilities/{capabilityId}/evidence")
+    List<CapabilityService.Evidence> history(@AuthenticationPrincipal AccountPrincipal student,
+                                                      @PathVariable String capabilityId) {
+        return capabilities.history(student.accountId(), capabilityId);
     }
 
     @GetMapping("/assessment/{id}")

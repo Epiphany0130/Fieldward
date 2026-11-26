@@ -10,6 +10,7 @@ final class CareerCatalog {
 
     private CareerCatalog() {}
 
+    // Snapshot used by the legacy assessment format. V12 seeds independently versioned learning routes.
     static final List<Direction> DIRECTIONS = List.of(
         direction("java-backend", "Java 后端开发", "开发业务接口、数据服务和后台系统。", "Java 开发实习生 · 后端开发工程师",
             skill("java", "Java 与集合", 22, true, "用 Java 实现一段可测试的业务逻辑。",
