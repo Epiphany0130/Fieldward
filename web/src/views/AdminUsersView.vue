@@ -67,6 +67,30 @@ async function changeStatus(user: Account) {
   }
 }
 
+async function adjustCredits(user: Account) {
+  if (busy.value) return
+  const raw = window.prompt(`调整「${user.displayName}」的积分（正数增加，负数扣减）`)
+  if (raw === null) return
+  const points = Number(raw.trim())
+  if (!raw.trim() || !Number.isSafeInteger(points) || points === 0) {
+    message.value = '请输入非零整数积分。'
+    return
+  }
+  const reason = window.prompt('请输入调整原因')?.trim()
+  if (!reason) return
+  updating.value = user.id
+  message.value = ''
+  feedback.value = ''
+  try {
+    await api(`/admin/users/${user.id}/credits`, 'POST', { points, reason, requestId: crypto.randomUUID() })
+    feedback.value = `积分调整成功 · ${user.displayName}`
+  } catch (error) {
+    await showError(error)
+  } finally {
+    updating.value = ''
+  }
+}
+
 onMounted(() => loadUsers())
 </script>
 
@@ -102,6 +126,7 @@ onMounted(() => loadUsers())
             </span></span>
             <time :datetime="user.createdAt">{{ formatDate(user.createdAt) }}</time>
             <div class="user-actions">
+              <button class="button button-quiet" type="button" :disabled="busy" @click="adjustCredits(user)">调整积分</button>
               <button
                 v-if="user.role === 'STUDENT'"
                 class="button button-quiet"

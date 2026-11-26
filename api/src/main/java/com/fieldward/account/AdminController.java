@@ -1,6 +1,10 @@
 package com.fieldward.account;
 
+import com.fieldward.credits.CreditService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PostMapping;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -20,9 +24,11 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/admin/users")
 class AdminController {
     private final AccountMapper accounts;
+    private final CreditService credits;
 
-    AdminController(AccountMapper accounts) {
+    AdminController(AccountMapper accounts, CreditService credits) {
         this.accounts = accounts;
+        this.credits = credits;
     }
 
     @GetMapping
@@ -45,6 +51,15 @@ class AdminController {
         }
         return AccountView.from(account);
     }
+
+    @PostMapping("/{id}/credits")
+    void adjustCredits(@AuthenticationPrincipal AccountPrincipal operator, @PathVariable @Min(1) long id,
+                       @RequestBody @Valid CreditInput input) {
+        credits.adjust(id, operator.accountId(), input.points(), input.reason(), input.requestId());
+    }
+
+    record CreditInput(@NotNull Long points, @NotBlank @Size(max = 200) String reason,
+                       @NotBlank @Size(max = 200) String requestId) {}
 
     record StatusInput(@NotNull Boolean enabled) {}
 

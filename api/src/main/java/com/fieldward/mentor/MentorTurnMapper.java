@@ -103,13 +103,14 @@ interface MentorTurnMapper {
             """)
     StoredTurn observe(@Param("conversation") long conversation, @Param("side") Long side, @Param("requestId") String requestId);
 
-    @Update("""
+    @Select(value = """
             UPDATE mentor_turns SET status = 'INTERRUPTED', lease_until = NULL, updated_at = CURRENT_TIMESTAMP
             WHERE conversation_id = #{conversation}
             """ + THREAD + """
                 AND status = 'STREAMING' AND lease_until <= CURRENT_TIMESTAMP
-            """)
-    void expire(@Param("conversation") long conversation, @Param("side") Long side);
+            RETURNING
+            """ + STORED, affectData = true)
+    List<StoredTurn> expire(@Param("conversation") long conversation, @Param("side") Long side);
 
     @Select(value = """
             INSERT INTO mentor_turns (conversation_id, side_chat_id, request_id, student_message, status, attempt, lease_until)
@@ -159,7 +160,7 @@ interface MentorTurnMapper {
             UPDATE mentor_turns SET status = 'INTERRUPTED', lease_until = NULL, updated_at = CURRENT_TIMESTAMP
             WHERE id = #{id} AND attempt = #{attempt} AND status = 'STREAMING'
             """)
-    void interrupt(@Param("id") long id, @Param("attempt") int attempt);
+    int interrupt(@Param("id") long id, @Param("attempt") int attempt);
 
     @Select("SELECT " + STORED + """
             FROM mentor_turns WHERE conversation_id = #{conversation}

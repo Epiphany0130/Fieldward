@@ -51,10 +51,15 @@ class MentorChatController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "当前登录账号已变更，请重新登录后再发送");
         }
         var turn = turns.claim(student.accountId(), side, message.requestId().toString(), message.content(), model.available());
-        return ResponseEntity.ok()
-                .header("Cache-Control", "no-store")
-                .header("X-Accel-Buffering", "no")
-                .body(stream.open(turn));
+        try {
+            return ResponseEntity.ok()
+                    .header("Cache-Control", "no-store")
+                    .header("X-Accel-Buffering", "no")
+                    .body(stream.open(turn));
+        } catch (IOException | RuntimeException error) {
+            if (turn.status() != MentorTurnMapper.Status.COMPLETED) turns.interrupt(turn);
+            throw error;
+        }
     }
 
     record StudentMessage(@NotNull @Pattern(regexp = "[0-9]{1,19}") String accountId,

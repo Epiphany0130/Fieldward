@@ -1,5 +1,7 @@
 package com.fieldward.mentor;
 
+import com.fieldward.credits.CreditService;
+import com.fieldward.credits.ExpiredCreditCleanup;
 import com.fieldward.mentor.MentorTurnMapper.StoredTurn;
 import com.fieldward.mentor.MentorTurnMapper.TurnView;
 import java.util.ArrayList;
@@ -17,11 +19,15 @@ class MentorTurns {
     private static final int PAGE_SIZE = 30;
     private static final int CONTEXT_BUDGET = 56_000;
     private final MentorTurnMapper mapper;
+    private final CreditService credits;
+    private final ExpiredCreditCleanup expiredCredits;
     private final MentorMemory memory;
     private final CareerPlans careers;
     private final SkillSessions skills;
 
-    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers, SkillSessions skills) {
+    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers, SkillSessions skills, CreditService credits, ExpiredCreditCleanup expiredCredits) {
+        this.expiredCredits = expiredCredits;
+        this.credits = credits;
         this.mapper = mapper;
         this.memory = memory;
         this.careers = careers;
@@ -42,6 +48,7 @@ class MentorTurns {
 
     @Transactional
     public StoredTurn claim(long accountId, Long side, String requestId, String rawMessage, boolean available) {
+        expiredCredits.recover(accountId);
         String message = rawMessage.strip();
         if (message.indexOf(0) >= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "消息包含不支持的字符");
@@ -54,7 +61,7 @@ class MentorTurns {
         if (skills.testing(conversation, side)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "请在技能核验旁聊提交作答或开始带学");
         }
-        mapper.expire(conversation, side);
+        for (var expired : mapper.expire(conversation, side)) credits.releaseIfPresent(creditRequest(expired));
         var previous = mapper.find(conversation, side, requestId);
         if (previous != null) {
             if (!message.equals(previous.studentMessage())) {
@@ -66,18 +73,30 @@ class MentorTurns {
         if (mapper.active(conversation, side) != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Mentor 正在回复，请稍后再试");
         }
-        if (previous != null) return mapper.retry(previous.id(), LEASE_SECONDS);
+        if (previous != null) {
+            credits.releaseIfPresent(creditRequest(previous));
+            var retry = mapper.retry(previous.id(), LEASE_SECONDS);
+            credits.reserveAi(accountId, creditRequest(retry), "FREE");
+            return retry;
+        }
         var turn = mapper.start(conversation, side, requestId, message, LEASE_SECONDS);
+        credits.reserveAi(accountId, creditRequest(turn), "FREE");
         memory.capture(turn);
         return turn;
     }
 
-    StoredTurn complete(StoredTurn turn, String reply, List<MentorMemory.Source> sources) {
-        return mapper.complete(turn.id(), turn.attempt(), reply, memory.writeSources(sources));
+    private String creditRequest(StoredTurn turn) { return "mentor:" + turn.id() + ":" + turn.attempt(); }
+
+    @Transactional
+    public StoredTurn complete(StoredTurn turn, String reply, List<MentorMemory.Source> sources) {
+        var completed = mapper.complete(turn.id(), turn.attempt(), reply, memory.writeSources(sources));
+        if (completed != null) credits.settleAi(creditRequest(turn));
+        return completed;
     }
 
-    void interrupt(StoredTurn turn) {
-        mapper.interrupt(turn.id(), turn.attempt());
+    @Transactional
+    public void interrupt(StoredTurn turn) {
+        if (mapper.interrupt(turn.id(), turn.attempt()) == 1) credits.release(creditRequest(turn));
     }
 
     Generation context(StoredTurn turn) {

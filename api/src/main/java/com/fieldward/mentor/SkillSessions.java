@@ -1,6 +1,8 @@
 package com.fieldward.mentor;
 
 import com.fieldward.mentor.CareerFit.Mark;
+import com.fieldward.credits.CreditService;
+import com.fieldward.credits.ExpiredCreditCleanup;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -41,6 +43,8 @@ class SkillSessions {
             """;
 
     private final SkillSessionMapper sessions;
+    private final CreditService credits;
+    private final ExpiredCreditCleanup expiredCredits;
     private final LegacyCareerBackfill legacy;
     private final MentorTurnMapper turns;
     private final CareerPlans careers;
@@ -49,7 +53,9 @@ class SkillSessions {
     private final TransactionTemplate tx;
 
     SkillSessions(SkillSessionMapper sessions, MentorTurnMapper turns, CareerPlans careers, MentorModel model,
-                  JsonMapper json, TransactionTemplate tx, LegacyCareerBackfill legacy) {
+                  JsonMapper json, TransactionTemplate tx, LegacyCareerBackfill legacy, CreditService credits, ExpiredCreditCleanup expiredCredits) {
+        this.expiredCredits = expiredCredits;
+        this.credits = credits;
         this.sessions = sessions;
         this.legacy = legacy;
         this.turns = turns;
@@ -96,6 +102,7 @@ class SkillSessions {
     }
 
     View step(long account, long id, int revision, String rawAnswer) {
+        expiredCredits.recover(account);
         var session = sessions.find(account, id);
         if (session == null) throw error(HttpStatus.NOT_FOUND, "请先确认技术栈自评");
         if (session.revision() > revision) return view(session);
@@ -109,9 +116,20 @@ class SkillSessions {
             throw error(HttpStatus.BAD_REQUEST, "请检查本次操作或作答内容");
         }
         String claim = UUID.randomUUID().toString();
-        if (sessions.claim(account, id, revision, claim) != 1) {
-            throw error(HttpStatus.CONFLICT, "正在处理该技术点，请稍后刷新查看进度");
-        }
+        boolean usesModel = switch (state.phase()) {
+            case PREPARING, TEST -> true;
+            case REPORT -> model.available() && !state.studyTopics().isEmpty();
+            case LEARNING -> model.available() && state.lessonIndex() + 1 < state.studyTopics().size();
+            case DONE -> false;
+        };
+        String creditRequest = "skill:" + claim;
+        tx.executeWithoutResult(status -> {
+            String expired = sessions.expiredClaim(account, id);
+            if (expired != null) credits.releaseIfPresent("skill:" + expired);
+            if (sessions.claim(account, id, revision, claim) != 1)
+                throw error(HttpStatus.CONFLICT, "正在处理该技术点，请稍后刷新查看进度");
+            if (usesModel) credits.reserveAi(account, creditRequest, "SKILLS");
+        });
         try {
             var next = switch (state.phase()) {
                 case PREPARING, TEST -> exam(state, answer);
@@ -130,6 +148,8 @@ class SkillSessions {
                     throw error(HttpStatus.CONFLICT, "核验进度已更新，请刷新后继续");
                 }
                 turns.logSideTurn(session.conversationId(), session.sideChatId(), testing ? answer : null, next.reply());
+                if (usesModel) credits.settleAi(creditRequest);
+                if (next.state().phase() == Phase.DONE) credits.protect(account, "SKILLS", 0);
                 return view(sessions.find(account, id));
             });
             legacy.tryImport(account, id);
@@ -141,6 +161,7 @@ class SkillSessions {
             log.warn("Skill session {} revision {}: {}", id, revision, exception.getClass().getSimpleName());
             throw error(HttpStatus.BAD_GATEWAY, "Mentor 这次未能生成有效结果，请重试，进度已保留");
         } finally {
+            if (usesModel) credits.release(creditRequest);
             sessions.release(account, id, claim);
         }
     }
@@ -190,7 +211,7 @@ class SkillSessions {
         return new Change(testing, feedback + "**" + state.testTopics().get(nextIndex) + "**\n\n" + question.prompt());
     }
 
-    private Change lesson(State state, int index) throws InterruptedException {
+    private Change lesson(State state, int index) throws IOException, InterruptedException {
         boolean done = index >= state.studyTopics().size();
         String opening = "本轮学习路线已走完。可以在这里继续回顾项目和练习。";
         if (!done) {
@@ -202,15 +223,11 @@ class SkillSessions {
                 state.testTopics(), state.grades(), null, state.studyTopics(), index), opening);
     }
 
-    private String lessonOpening(String topic, Grade grade) throws InterruptedException {
+    private String lessonOpening(String topic, Grade grade) throws IOException, InterruptedException {
         if (model.available()) {
-            try {
-                var input = Map.of("technology", topic, "level", grade == null ? Mark.RED : grade.mark(),
-                        "assessment", grade == null ? "学生自评不会，未参加核验" : grade.feedback());
-                return text(model.completeJson(TUTOR, input, 900, Duration.ofSeconds(12)), "opening", 900);
-            } catch (IOException | tools.jackson.core.JacksonException exception) {
-                log.warn("Mentor lesson opening unavailable: {}", exception.getClass().getSimpleName());
-            }
+            var input = Map.of("technology", topic, "level", grade == null ? Mark.RED : grade.mark(),
+                    "assessment", grade == null ? "学生自评不会，未参加核验" : grade.feedback());
+            return text(model.completeJson(TUTOR, input, 900, Duration.ofSeconds(12)), "opening", 900);
         }
         String introduction = "我们先学 **" + topic + "**。";
         if (grade == null) {

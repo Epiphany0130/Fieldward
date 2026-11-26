@@ -69,6 +69,7 @@ class CareerPlans {
             writes.finish(claim, fit.analyze(direction, claim.input()));
             legacy.tryImport(assessment.accountId(), assessment.id());
         } catch (InterruptedException exception) {
+            writes.fail(assessment);
             Thread.currentThread().interrupt();
         } catch (IOException exception) {
             log.warn("Career assessment {} failed: {}", assessment.id(), exception.getMessage());

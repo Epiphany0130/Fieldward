@@ -33,6 +33,12 @@ interface SkillSessionMapper {
     void create(@Param("account") long account, @Param("id") long id, @Param("conversation") long conversation,
                 @Param("side") long side, @Param("state") String state);
 
+    @Select("""
+            SELECT CASE WHEN lease_until <= CURRENT_TIMESTAMP THEN claim_id::text ELSE NULL END
+            FROM career_skill_sessions WHERE account_id = #{account} AND assessment_id = #{id} FOR UPDATE
+            """)
+    String expiredClaim(@Param("account") long account, @Param("id") long id);
+
     @Update("""
             UPDATE career_skill_sessions
             SET claim_id = CAST(#{claim} AS uuid), lease_until = CURRENT_TIMESTAMP + interval '90 seconds'
