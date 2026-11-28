@@ -79,7 +79,7 @@ class SkillSessions {
             throw error(HttpStatus.CONFLICT, "请先使用新版 AI 完成分析");
         }
         var topics = assessment.report().route().topics();
-        if (!marks.keySet().equals(new HashSet<>(topics)) || marks.containsValue(null)) {
+        if (!marks.keySet().equals(new HashSet<>(topics)) || marks.values().stream().anyMatch(java.util.Objects::isNull)) {
             throw error(HttpStatus.BAD_REQUEST, "请为路线中的每个技术点确认状态");
         }
 
@@ -92,7 +92,7 @@ class SkillSessions {
             String title = "技能核验 · " + assessment.directionTitle() + " · " + UUID.randomUUID().toString().substring(0, 8);
             long side = turns.createDedicatedSide(conversation, title);
             var state = new State(tested.isEmpty() ? Phase.REPORT : Phase.PREPARING, topics, Map.copyOf(marks),
-                    tested, List.of(), null, tested.isEmpty() ? topics : List.of(), 0);
+                    tested, List.of(), null, tested.isEmpty() ? topics : List.of(), 0, assessment.report().route().labels());
             sessions.create(account, id, conversation, side, json.writeValueAsString(state));
             if (tested.isEmpty()) turns.logSideTurn(conversation, side, null, reportLine(state));
             return sessions.find(account, id);
@@ -172,7 +172,7 @@ class SkillSessions {
         var input = new HashMap<String, Object>();
         boolean answering = state.question() != null;
         if (answering) {
-            input.put("currentTopic", state.testTopics().get(grades.size()));
+            input.put("currentTopic", state.label(state.testTopics().get(grades.size())));
             input.put("prompt", state.question().prompt());
             input.put("rubric", state.question().rubric());
             input.put("studentAnswer", MentorResumes.redactContacts(answer));
@@ -181,7 +181,7 @@ class SkillSessions {
         boolean hasNext = nextIndex < state.testTopics().size();
         if (hasNext) {
             String topic = state.testTopics().get(nextIndex);
-            input.put("nextTopic", Map.of("technology", topic, "assessmentLevel", state.selfMarks().get(topic)));
+            input.put("nextTopic", Map.of("technology", state.label(topic), "assessmentLevel", state.selfMarks().get(topic)));
         }
         var response = model.completeJson(EXAMINER, input, 1800, Duration.ofSeconds(40));
         String feedback = "";
@@ -194,21 +194,21 @@ class SkillSessions {
             String topic = state.testTopics().get(grades.size());
             String reason = text(grade, "feedback", 150);
             grades.add(new Grade(topic, mark, score, reason));
-            feedback = "**" + topic + " · " + score + "/100**\n\n" + reason + "\n\n";
+            feedback = "**" + state.label(topic) + " · " + score + "/100**\n\n" + reason + "\n\n";
         }
         if (!hasNext) {
             var effective = new HashMap<>(state.selfMarks());
             grades.forEach(grade -> effective.put(grade.topic(), grade.mark()));
             var queue = state.topics().stream().filter(topic -> effective.get(topic) != Mark.GREEN).toList();
             var report = new State(Phase.REPORT, state.topics(), state.selfMarks(), state.testTopics(), grades,
-                    null, queue, 0);
+                    null, queue, 0, state.labels());
             return new Change(report, feedback + reportLine(report));
         }
         var next = response.path("next");
         var question = new Question(text(next, "prompt", 550), text(next, "rubric", 650));
         var testing = new State(Phase.TEST, state.topics(), state.selfMarks(), state.testTopics(), grades,
-                question, List.of(), 0);
-        return new Change(testing, feedback + "**" + state.testTopics().get(nextIndex) + "**\n\n" + question.prompt());
+                question, List.of(), 0, state.labels());
+        return new Change(testing, feedback + "**" + state.label(state.testTopics().get(nextIndex)) + "**\n\n" + question.prompt());
     }
 
     private Change lesson(State state, int index) throws IOException, InterruptedException {
@@ -217,10 +217,10 @@ class SkillSessions {
         if (!done) {
             String topic = state.studyTopics().get(index);
             var grade = state.grades().stream().filter(item -> item.topic().equals(topic)).findFirst().orElse(null);
-            opening = lessonOpening(topic, grade);
+            opening = lessonOpening(state.label(topic), grade);
         }
         return new Change(new State(done ? Phase.DONE : Phase.LEARNING, state.topics(), state.selfMarks(),
-                state.testTopics(), state.grades(), null, state.studyTopics(), index), opening);
+                state.testTopics(), state.grades(), null, state.studyTopics(), index, state.labels()), opening);
     }
 
     private String lessonOpening(String topic, Grade grade) throws IOException, InterruptedException {
@@ -278,7 +278,7 @@ class SkillSessions {
         if (state.phase() != Phase.LEARNING) return "";
         String topic = state.studyTopics().get(state.lessonIndex());
         var grade = state.grades().stream().filter(item -> item.topic().equals(topic)).findFirst().orElse(null);
-        return "当前是技能路线的带学旁聊，当前技术是 " + topic + "。"
+        return "当前是技能路线的带学旁聊，当前技术是 " + state.label(topic) + "。"
                 + "围绕这项技能批改和讲解。一次给一个具体问题或小练习，等学生答完再深入。"
                 + "由学生在界面确认进入下一技术点。当前起点："
                 + (grade == null ? "学生自评不会，未核验。" : grade.feedback());
@@ -300,7 +300,7 @@ class SkillSessions {
         return new View(Long.toString(session.assessmentId()), Long.toString(session.sideChatId()), session.revision(),
                 state.phase(), state.selfMarks(), marks, state.grades(), current,
                 state.question() == null ? null : state.question().prompt(),
-                state.testTopics().size(), state.studyTopics(), state.lessonIndex());
+                state.testTopics().size(), state.studyTopics(), state.lessonIndex(), state.labels());
     }
 
     private static ResponseStatusException error(HttpStatus status, String detail) {
@@ -311,9 +311,11 @@ class SkillSessions {
     record Question(String prompt, String rubric) {}
     record Grade(String topic, Mark mark, int score, String feedback) {}
     record State(Phase phase, List<String> topics, Map<String, Mark> selfMarks, List<String> testTopics,
-                 List<Grade> grades, Question question, List<String> studyTopics, int lessonIndex) {}
+                 List<Grade> grades, Question question, List<String> studyTopics, int lessonIndex, Map<String, String> labels) {
+        String label(String topic) { return labels == null ? topic : labels.getOrDefault(topic, topic); }
+    }
     record View(String assessmentId, String sideId, int revision, Phase phase, Map<String, Mark> selfMarks,
                 Map<String, Mark> marks, List<Grade> grades, String currentTopic, String question, int testCount,
-                List<String> studyTopics, int lessonIndex) {}
+                List<String> studyTopics, int lessonIndex, Map<String, String> labels) {}
     record Change(State state, String reply) {}
 }

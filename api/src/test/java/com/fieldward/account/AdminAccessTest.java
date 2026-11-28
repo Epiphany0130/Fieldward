@@ -32,6 +32,7 @@ class AdminAccessTest extends PostgresIntegrationTest {
         var csrf = json.readTree(mvc.perform(get("/api/auth/csrf").session(student)).andReturn().getResponse().getContentAsString());
         String header = csrf.get("headerName").asString(), token = csrf.get("token").asString();
         mvc.perform(post("/api/admin/users/" + studentId + "/credits").session(student).header(header, token).contentType("application/json").content("{\"points\":5,\"reason\":\"test\",\"requestId\":\"access-test\"}")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/admin/routes").session(student).header(header, token).contentType("application/json").content("{}" )).andExpect(status().isForbidden());
         mvc.perform(post("/api/admin/jobs/1/remove").session(student).header(header, token)).andExpect(status().isForbidden());
         mvc.perform(put("/api/admin/routes/java-backend").session(student).header(header, token).contentType("application/json").content("{}")).andExpect(status().isForbidden());
         mvc.perform(get("/api/admin/metrics").session(student)).andExpect(status().isForbidden());
@@ -46,6 +47,13 @@ class AdminAccessTest extends PostgresIntegrationTest {
         mvc.perform(get("/api/credits").session(other)).andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("access-test"))));
         mvc.perform(get("/api/admin/metrics").session(admin)).andExpect(status().isOk()).andExpect(jsonPath("$.registrations").isNumber());
         mvc.perform(get("/api/admin/routes").session(admin)).andExpect(status().isOk());
+        String longId = "{\"id\":\"abcdefghijklmnopqrstuvwxyzabcdefghijklmno\",\"title\":\"Title\",\"description\":\"description\",\"roles\":\"roles\",\"items\":[{\"capabilityId\":\"java-backend:java\",\"title\":\"Java\",\"objective\":\"objective\"}]}";
+        mvc.perform(post("/api/admin/routes").session(admin).header(csrf.get("headerName").asString(), csrf.get("token").asString()).contentType("application/json").content(longId)).andExpect(status().isBadRequest());
+        String newDirection = "{\"id\":\"product-design\",\"title\":\"Product Design\",\"description\":\"Design products\",\"roles\":\"Designer\",\"items\":[{\"capabilityId\":\"java-backend:java\",\"title\":\"Research\",\"objective\":\"Understand users\"}]}";
+        mvc.perform(post("/api/admin/routes").session(admin).header(csrf.get("headerName").asString(), csrf.get("token").asString()).contentType("application/json").content(newDirection)).andExpect(status().isOk());
+        mvc.perform(post("/api/admin/routes").session(admin).header(csrf.get("headerName").asString(), csrf.get("token").asString()).contentType("application/json").content(newDirection)).andExpect(status().isConflict());
+        mvc.perform(get("/api/career").session(student)).andExpect(content().string(org.hamcrest.Matchers.containsString("product-design")));
+
         mvc.perform(get("/api/admin/routes/capabilities").session(admin)).andExpect(status().isOk()).andExpect(content().string(org.hamcrest.Matchers.containsString("java-backend:java")));
         mvc.perform(post("/api/admin/routes/capabilities").session(admin).header(csrf.get("headerName").asString(), csrf.get("token").asString()).contentType("application/json").content("{\"id\":\"new-capability\",\"title\":\"新能力\"}")).andExpect(status().isOk());
         mvc.perform(get("/api/admin/routes/capabilities").session(admin)).andExpect(content().string(org.hamcrest.Matchers.containsString("new-capability")));

@@ -94,13 +94,16 @@ class CareerFit {
     }
 
     Report analyze(CareerCatalog.Direction direction, Input input) throws IOException, InterruptedException {
-        var route = RoadmapCatalog.forDirection(direction.id());
+        return analyze(direction, input, RoadmapCatalog.forDirection(direction.id()));
+    }
+
+    Report analyze(CareerCatalog.Direction direction, Input input, RoadmapCatalog.Route route) throws IOException, InterruptedException {
         if (input.text().isBlank()) {
             return report(direction, input, Map.of(), route, Map.of());
         }
         var topics = route.topics();
         var topicInputs = java.util.stream.IntStream.range(0, topics.size())
-                .mapToObj(id -> Map.of("topicId", id, "title", topics.get(id))).toList();
+                .mapToObj(id -> Map.of("topicId", id, "title", route.label(topics.get(id)))).toList();
         var requirements = direction.skills().stream().map(skill -> Map.of(
                 "id", skill.id(), "title", skill.title(), "objective", skill.objective())).toList();
         var answer = model.completeJson(INSTRUCTIONS, Map.of(

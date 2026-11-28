@@ -11,7 +11,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 class DirectionChangeService {
     private final JdbcTemplate db;
-    DirectionChangeService(JdbcTemplate db) { this.db = db; }
+    private final CareerDirections directions;
+    DirectionChangeService(JdbcTemplate db, CareerDirections directions) { this.db = db; this.directions = directions; }
     record Proposal(UUID id, String introduction, List<String> shared, List<String> added, List<String> removed, String advice) {}
     record DirectionView(String directionId) {}
     private ResponseStatusException missing() { return new ResponseStatusException(HttpStatus.NOT_FOUND, "方向变更不存在"); }
@@ -25,7 +26,7 @@ class DirectionChangeService {
     private String title(String id) { return db.queryForObject("SELECT title FROM career_capabilities WHERE id=?", String.class, id); }
     @Transactional
     public Proposal propose(long account, String direction) {
-        CareerCatalog.require(direction); // Only directions supported by the legacy assessment can be selected.
+        directions.require(direction);
         String description = db.query("SELECT description FROM career_directions WHERE id=?", (rs, row) -> rs.getString(1), direction).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择一个有效的职业方向"));
         lock(account);
         var current = db.query("SELECT a.id,a.direction_id FROM career_targets t JOIN career_assessments a ON a.id=t.assessment_id AND a.account_id=t.account_id WHERE t.account_id=?", (r,n)->new Object[]{r.getLong(1),r.getString(2)}, account).stream().findFirst().orElseThrow(this::missing);

@@ -31,7 +31,7 @@ export interface CareerReport {
   sourceQuality: 'READABLE' | 'OCR' | 'UNREADABLE'
   skills: CareerSkill[]
   roadmap: CareerStep[]
-  route: { sourceUrl: string; phases: { title: string; topics: string[] }[] } | null
+  route: { sourceUrl: string | null; labels?: Record<string, string> | null; phases: { title: string; topics: string[] }[] } | null
   topicSuggestions: Record<string, { mark: SkillMark; quote: string; basis: string }> | null
 }
 
@@ -77,6 +77,7 @@ export interface SkillGrade {
 }
 
 export interface SkillSession {
+  labels?: Record<string, string> | null
   assessmentId: string
   sideId: string
   revision: number

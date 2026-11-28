@@ -58,7 +58,7 @@ async function start() {
         <p v-else-if="hasReport">已核验的技能按 Mentor 的评分更新。红色自评项保留为待学。</p>
         <p v-else>已保存你的自评。继续核验时，Mentor 会按顺序逐项提问。</p>
       </div>
-      <a :href="route.sourceUrl" target="_blank" rel="noopener noreferrer">黑马公开课程</a>
+      <a v-if="route.sourceUrl" :href="route.sourceUrl" target="_blank" rel="noopener noreferrer">黑马公开课程</a>
     </header>
     <div class="status-key" aria-label="自评状态">
       <span v-for="(label, mark) in selfMarkLabels" :key="mark" :data-mark="mark">{{ label }}</span>
@@ -68,7 +68,7 @@ async function start() {
       <ul>
         <li v-for="topic in phase.topics" :key="topic" class="topic">
           <div>
-            <h4>{{ topic }}</h4>
+            <h4>{{ route.labels?.[topic] ?? topic }}</h4>
             <template v-if="gradesByTopic.has(topic)">
               <p>{{ gradesByTopic.get(topic)?.feedback }}</p>
             </template>
@@ -77,7 +77,7 @@ async function start() {
               <blockquote>{{ suggestions[topic]?.quote }}</blockquote>
             </details>
           </div>
-          <div v-if="!session" class="mark-controls" role="group" :aria-label="topic + ' 的自评'">
+          <div v-if="!session" class="mark-controls" role="group" :aria-label="(route.labels?.[topic] ?? topic) + ' 的自评'">
             <button v-for="(label, mark) in selfMarkLabels" :key="mark" type="button" :data-mark="mark"
                     :aria-pressed="marks[topic] === mark" :disabled="saving" @click="marks[topic] = mark">{{ label }}</button>
           </div>

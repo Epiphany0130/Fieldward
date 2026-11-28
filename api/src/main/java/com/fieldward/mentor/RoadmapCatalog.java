@@ -125,7 +125,9 @@ final class RoadmapCatalog {
         return new Phase(title, Arrays.stream(topics.split("\\|")).map(String::strip).toList());
     }
 
-    record Route(String sourceUrl, List<Phase> phases) {
+    record Route(String sourceUrl, List<Phase> phases, java.util.Map<String, String> labels) {
+        Route(String sourceUrl, List<Phase> phases) { this(sourceUrl, phases, null); }
+        String label(String topic) { return labels == null ? topic : labels.getOrDefault(topic, topic); }
         List<String> topics() {
             return phases.stream().flatMap(phase -> phase.topics().stream()).toList();
         }

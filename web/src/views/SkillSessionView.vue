@@ -106,10 +106,10 @@ onBeforeUnmount(() => { generation++ })
     <header>
       <h1>{{ learning || session?.phase === 'DONE' ? 'Mentor 带学' : 'Mentor 技能核验' }}</h1>
       <p v-if="testing && session">
-        第 {{ session.grades.length + 1 }} / {{ session.testCount }} 项 · {{ session.currentTopic }}
+        第 {{ session.grades.length + 1 }} / {{ session.testCount }} 项 · {{ session.labels?.[session.currentTopic ?? ''] ?? session.currentTopic }}
       </p>
       <p v-else-if="learning && session">
-        第 {{ session.lessonIndex + 1 }} / {{ session.studyTopics.length }} 项 · {{ session.currentTopic }}
+        第 {{ session.lessonIndex + 1 }} / {{ session.studyTopics.length }} 项 · {{ session.labels?.[session.currentTopic ?? ''] ?? session.currentTopic }}
       </p>
     </header>
     <p v-if="loading" role="status">正在读取旁聊…</p>
@@ -123,7 +123,7 @@ onBeforeUnmount(() => { generation++ })
             <ul v-if="session.grades.length" class="grades">
               <li v-for="grade in session.grades" :key="grade.topic">
                 <div class="grade-title">
-                  <strong>{{ grade.topic }}</strong>
+                  <strong>{{ session.labels?.[grade.topic] ?? grade.topic }}</strong>
                   <span :data-mark="grade.mark">{{ testedMarkLabels[grade.mark] }} · {{ grade.score }}/100</span>
                 </div>
                 <p>{{ grade.feedback }}</p>
@@ -132,7 +132,7 @@ onBeforeUnmount(() => { generation++ })
           </div>
         </details>
         <template v-if="session.phase === 'REPORT'">
-          <p v-if="session.studyTopics.length">下一项 · <strong>{{ session.studyTopics[0] }}</strong></p>
+          <p v-if="session.studyTopics.length">下一项 · <strong>{{ session.labels?.[session.studyTopics[0]!] ?? session.studyTopics[0] }}</strong></p>
           <p v-else>这条路线的技术点均已通过核验。</p>
           <button class="button button-primary" type="button" :disabled="busy" @click="step()">
             {{ busy ? 'Mentor 正在准备…' : session.studyTopics.length ? '开始第一项带学' : '完成核验' }}
@@ -162,7 +162,7 @@ onBeforeUnmount(() => { generation++ })
       <button v-else class="button button-primary" type="button" @click="step()">生成第一题</button>
 
       <div v-if="learning" class="lesson-actions">
-        <p v-if="session.studyTopics[session.lessonIndex + 1]">下一项 · {{ session.studyTopics[session.lessonIndex + 1] }}</p>
+        <p v-if="session.studyTopics[session.lessonIndex + 1]">下一项 · {{ session.labels?.[session.studyTopics[session.lessonIndex + 1]!] ?? session.studyTopics[session.lessonIndex + 1] }}</p>
         <button type="button" class="button button-primary" :disabled="busy" @click="step()">
           {{ busy ? '正在准备…' : session.lessonIndex + 1 === session.studyTopics.length ? '完成本轮学习' : '完成本项，继续' }}
         </button>

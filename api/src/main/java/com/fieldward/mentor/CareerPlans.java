@@ -59,11 +59,10 @@ class CareerPlans {
     }
 
     Summary start(long accountId, long resumeVersion, String directionId) {
-        var direction = CareerCatalog.require(directionId);
         var claim = writes.claim(accountId, directionId, resumeVersion);
         if (claim.start()) {
             try {
-                workers.execute(() -> analyze(claim, direction));
+                workers.execute(() -> analyze(claim, claim.selection()));
             } catch (RejectedExecutionException exception) {
                 writes.fail(claim.assessment());
             }
@@ -71,11 +70,11 @@ class CareerPlans {
         return summary(careers.current(accountId));
     }
 
-    private void analyze(CareerWrites.Claim claim, CareerCatalog.Direction direction) {
+    private void analyze(CareerWrites.Claim claim, CareerDirections.Selection direction) {
         var assessment = claim.assessment();
         try {
             if (!claim.input().text().isBlank() && !model.available()) throw new IOException("Mentor model unavailable");
-            writes.finish(claim, fit.analyze(direction, claim.input()));
+            writes.finish(claim, fit.analyze(direction.direction(), claim.input(), direction.route()));
             legacy.tryImport(assessment.accountId(), assessment.id());
         } catch (InterruptedException exception) {
             writes.fail(assessment);

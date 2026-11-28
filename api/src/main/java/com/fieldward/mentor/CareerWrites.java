@@ -19,6 +19,8 @@ import tools.jackson.databind.json.JsonMapper;
 class CareerWrites {
     private static final Set<String> OCR_PENDING = Set.of("PENDING", "PROCESSING", "RETRY");
     private final CareerMapper careers;
+    private final CareerDirections directions;
+    private final org.springframework.jdbc.core.JdbcTemplate db;
     private final CreditService credits;
     private final ExpiredCreditCleanup expiredCredits;
     private final MentorConversationMapper conversations;
@@ -30,7 +32,9 @@ class CareerWrites {
 
     CareerWrites(CareerMapper careers, MentorConversationMapper conversations, MentorResumeMapper resumes,
                  MentorTurnMapper turns, CareerFit fit, JsonMapper json,
-                 @Value("${fieldward.mentor.ocr.enabled}") boolean ocrEnabled, CreditService credits, ExpiredCreditCleanup expiredCredits) {
+                 @Value("${fieldward.mentor.ocr.enabled}") boolean ocrEnabled, CreditService credits, ExpiredCreditCleanup expiredCredits, CareerDirections directions, org.springframework.jdbc.core.JdbcTemplate db) {
+        this.db = db;
+        this.directions = directions;
         this.expiredCredits = expiredCredits;
         this.credits = credits;
         this.careers = careers;
@@ -67,11 +71,17 @@ class CareerWrites {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "请先比较并确认方向切换");
         }
 
+        // The administrator locks this same row when creating a route revision. Keep the
+        // selected definition and the assessment claim in one transaction.
+        if (db.queryForList("SELECT id FROM career_directions WHERE id=? FOR SHARE", direction).isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择一个有效的职业方向");
+        var selection = directions.require(direction);
+        int routeVersion = selection.version();
         var document = resumes.find(Long.parseLong(workspace.conversationId()), version);
         var source = fit.input(document);
         var status = waitingForText(document.readable(), document.ocrStatus())
                 ? CareerMapper.Status.WAITING_TEXT : CareerMapper.Status.ANALYZING;
-        String fingerprint = digest(source, status);
+        String fingerprint = digest(source, status, routeVersion);
         var ticket = careers.claim(accountId, version, direction, fingerprint, status.name());
         var selected = ticket == null ? careers.existing(accountId, version, direction, fingerprint) : ticket;
         careers.activate(accountId, selected.id());
@@ -84,7 +94,7 @@ class CareerWrites {
         Long earlierReport = earlier != null
                 && json.readTree(earlier.report()).path("analysisVersion").asInt(0) < CareerFit.ANALYSIS_VERSION
                 ? earlier.id() : null;
-        return new Claim(selected, source, start, earlierReport);
+        return new Claim(selected, source, start, earlierReport, selection);
     }
 
     boolean waitingForText(boolean readable, String ocrStatus) {
@@ -126,9 +136,9 @@ class CareerWrites {
 
     private String creditRequest(long id, int attempt) { return "career:" + id + ":" + attempt; }
 
-    private String digest(CareerFit.Input input, CareerMapper.Status status) {
+    private String digest(CareerFit.Input input, CareerMapper.Status status, int routeVersion) {
         try {
-            String evidence = CareerFit.ANALYSIS_VERSION + "\n" + status + "\n" + input.scan() + "\n" + input.text();
+            String evidence = CareerFit.ANALYSIS_VERSION + "\n" + status + "\n" + input.scan() + "\n" + input.text() + (routeVersion > 1 ? "\nroute:" + routeVersion : "");
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(evidence.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
@@ -136,5 +146,7 @@ class CareerWrites {
         }
     }
 
-    record Claim(CareerMapper.Assessment assessment, CareerFit.Input input, boolean start, Long earlierReport) {}
+    record Claim(CareerMapper.Assessment assessment, CareerFit.Input input, boolean start, Long earlierReport, CareerDirections.Selection selection) {
+        Claim(CareerMapper.Assessment assessment, CareerFit.Input input, boolean start, Long earlierReport) { this(assessment, input, start, earlierReport, null); }
+    }
 }

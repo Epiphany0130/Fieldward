@@ -26,24 +26,27 @@ class LegacyCareerMapper {
         var row = rows.getFirst();
         String direction = (String) row.get("direction_id");
         String prefix = assessmentId + ":";
+        boolean stableIds = false;
         if (row.get("report") != null) {
             JsonNode report = json.readTree((String) row.get("report"));
+            stableIds = report.path("route").path("labels").isObject();
             int index = 0;
             for (JsonNode skill : report.path("skills")) {
                 String key = skill.path("skillId").asString("");
-                add(accountId, assessmentId, direction, "LEGACY_ASSESSMENT", prefix + "skill:" + index++, key);
+                add(accountId, assessmentId, direction, "LEGACY_ASSESSMENT", prefix + "skill:" + index++, key, stableIds);
             }
         }
+        final boolean usesStableIds = stableIds;
         var session = jdbc.queryForList("SELECT revision, state::text AS state FROM career_skill_sessions WHERE account_id=? AND assessment_id=?", accountId, assessmentId);
         int revision = -1;
         if (!session.isEmpty()) {
             revision = (Integer) session.getFirst().get("revision");
             JsonNode state = json.readTree((String) session.getFirst().get("state"));
             state.path("selfMarks").properties().forEach(entry -> add(accountId, assessmentId, direction,
-                    "LEGACY_ASSESSMENT", prefix + "self:" + entry.getKey(), entry.getKey()));
+                    "LEGACY_ASSESSMENT", prefix + "self:" + entry.getKey(), entry.getKey(), usesStableIds));
             int index = 0;
             for (JsonNode grade : state.path("grades")) {
-                add(accountId, assessmentId, direction, "LEGACY_VERIFICATION", prefix + "grade:" + index++, grade.path("topic").asString(""));
+                add(accountId, assessmentId, direction, "LEGACY_VERIFICATION", prefix + "grade:" + index++, grade.path("topic").asString(""), usesStableIds);
             }
         }
         jdbc.update("""
@@ -58,9 +61,9 @@ class LegacyCareerMapper {
         return new MigrationResult(imported, unmapped);
     }
 
-    private void add(long account, long assessment, String direction, String type, String source, String key) {
+    private void add(long account, long assessment, String direction, String type, String source, String key, boolean stableIds) {
         // Only the frozen initial route is eligible: later catalog edits cannot change historical meaning.
-        List<String> matches = jdbc.queryForList("""
+        List<String> matches = stableIds ? jdbc.queryForList("SELECT DISTINCT capability_id FROM career_route_items WHERE direction_id=? AND capability_id=?", String.class, direction, key) : jdbc.queryForList("""
                 SELECT DISTINCT capability_id FROM career_route_items
                 WHERE direction_id=? AND version=1 AND (legacy_skill_id=? OR title=?)
                 """, String.class, direction, key, key);

@@ -23,10 +23,21 @@ class AdminRoutesController {
     }
     record Item(@NotBlank @Size(max=200) String capabilityId, @NotBlank @Size(max=200) String title, @NotBlank @Size(max=1000) String objective) {}
     record Input(@NotNull @Min(1) Integer version, @NotBlank @Size(max=200) String title, @NotBlank @Size(max=1000) String description, @NotBlank @Size(max=1000) String roles, @NotEmpty @Size(max=100) List<@Valid Item> items) {}
+    record CreateInput(@NotBlank @Size(max=40) @Pattern(regexp="[a-z][a-z0-9-]*") String id, @NotBlank @Size(max=200) String title, @NotBlank @Size(max=1000) String description, @NotBlank @Size(max=1000) String roles, @NotEmpty @Size(max=100) List<@Valid Item> items) {}
+    @PostMapping @Transactional void create(@RequestBody @Valid CreateInput input) {
+        validateItems(input.items());
+        if (db.update("INSERT INTO career_directions(id,title,description,roles) VALUES (?,?,?,?) ON CONFLICT DO NOTHING", input.id(), input.title(), input.description(), input.roles()) == 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "方向标识已存在");
+        db.update("INSERT INTO career_route_versions(direction_id,version) VALUES (?,1)", input.id());
+        int position = 0;
+        for (var item : input.items()) db.update("INSERT INTO career_route_items(direction_id,version,position,capability_id,title,objective) VALUES (?,1,?,?,?,?)", input.id(), ++position, item.capabilityId(), item.title(), item.objective());
+    }
+    private void validateItems(List<Item> items) {
+        var ids = new HashSet<String>();
+        for (var item : items) if (!ids.add(item.capabilityId()) || db.queryForObject("SELECT count(*) FROM career_capabilities WHERE id=?", Long.class, item.capabilityId()) == 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "能力标识无效或重复");
+    }
     @PutMapping("/{id}") @Transactional void update(@PathVariable String id, @RequestBody @Valid Input input) {
         if (db.queryForList("SELECT id FROM career_directions WHERE id=? FOR UPDATE", id).isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "方向不存在");
-        var ids = new HashSet<String>();
-        for (var item : input.items()) if (!ids.add(item.capabilityId()) || db.queryForObject("SELECT count(*) FROM career_capabilities WHERE id=?", Long.class, item.capabilityId()) == 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "能力标识无效或重复");
+        validateItems(input.items());
         int current = db.queryForObject("SELECT COALESCE(max(version),0) FROM career_route_versions WHERE direction_id=?", Integer.class, id);
         if (current != input.version()) throw new ResponseStatusException(HttpStatus.CONFLICT, "路线已被修改，请刷新后重试");
         db.update("UPDATE career_directions SET title=?,description=?,roles=? WHERE id=?", input.title(), input.description(), input.roles(), id);
