@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
-class MentorModel {
+public class MentorModel {
     private static final String INSTRUCTIONS = """
             你是循职 Fieldward 的 Mentor，帮助学生准备实习与校招。
             用自然、简洁的中文直接回答。能用一句话回答就用一句，普通对话通常不超过 5 句，保留最相关的依据。
@@ -63,7 +63,7 @@ class MentorModel {
                     && List.of("127.0.0.1", "localhost", "[::1]").contains(uri.getHost()));
     }
 
-    boolean available() {
+    public boolean available() {
         return endpoint != null && !apiKey.isEmpty() && !model.isEmpty();
     }
 
@@ -100,7 +100,7 @@ class MentorModel {
         }
     }
 
-    tools.jackson.databind.JsonNode completeJson(String instructions, Object input, int maxTokens, Duration timeout)
+    public tools.jackson.databind.JsonNode completeJson(String instructions, Object input, int maxTokens, Duration timeout)
             throws IOException, InterruptedException {
         var messages = List.of(new Message("system", instructions + "\n输出紧凑的 JSON，闭合对象后立即结束。"),
                 new Message("user", json.writeValueAsString(input)));

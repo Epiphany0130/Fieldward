@@ -51,6 +51,14 @@ class JobMapper {
           WHERE j.status='ACTIVE' AND EXISTS (SELECT 1 FROM job_sources s WHERE s.id=j.source_id AND s.authorized) ORDER BY j.id DESC
           """, (rs, n) -> new JobView(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7), rs.getObject(8, java.time.OffsetDateTime.class)));
     }
+    List<VersionedJob> listActiveVersioned() {
+        return db.query("""
+          SELECT j.id,j.source_id,j.source_job_id,j.status,v.title,v.requirements,v.source_url,v.verified_at,v.id
+          FROM jobs j JOIN LATERAL (SELECT * FROM job_versions WHERE job_id=j.id ORDER BY id DESC LIMIT 1) v ON true
+          WHERE j.status='ACTIVE' AND EXISTS (SELECT 1 FROM job_sources s WHERE s.id=j.source_id AND s.authorized) ORDER BY j.id DESC
+          """, (rs,n) -> new VersionedJob(new JobView(rs.getLong(1),rs.getString(2),rs.getString(3),rs.getString(4),rs.getString(5),rs.getString(6),rs.getString(7),rs.getObject(8,java.time.OffsetDateTime.class)),rs.getLong(9)));
+    }
+    record VersionedJob(JobView job,long version) {}
     record Cursor(String value) {}
     record JobView(long id, String sourceId, String sourceJobId, String status, String title, String requirements, String sourceUrl, java.time.OffsetDateTime verifiedAt) {}
 }
