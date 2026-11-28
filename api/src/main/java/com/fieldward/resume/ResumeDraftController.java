@@ -58,8 +58,10 @@ class ResumeDraftController {
     }
 
     @PutMapping("/draft")
+    @org.springframework.transaction.annotation.Transactional
     DraftView save(@AuthenticationPrincipal AccountPrincipal student, @RequestBody @Valid DraftSave input) {
         long accountId = requireAccount(student, input.accountId());
+        if (versions.lockAccount(accountId) == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         String content = json.writeValueAsString(input.content());
         var saved = input.revision() == 0
                 ? drafts.insert(accountId, content)

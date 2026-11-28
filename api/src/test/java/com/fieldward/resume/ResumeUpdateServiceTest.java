@@ -10,6 +10,9 @@ import static org.assertj.core.api.Assertions.*;
 class ResumeUpdateServiceTest extends PostgresIntegrationTest {
     @Autowired JdbcTemplate db;
     @Autowired ResumeUpdateService service;
+    @Autowired ResumeEvidenceWorker worker;
+    @Autowired ResumeDraftController controller;
+    @Autowired org.springframework.transaction.support.TransactionTemplate transaction;
 
     @Test @Transactional
     void passedLearningAddsSkillToLatestVersionWithoutInventingProjectAndIsIdempotent() {
@@ -154,6 +157,78 @@ class ResumeUpdateServiceTest extends PostgresIntegrationTest {
         long evidence = db.queryForObject("INSERT INTO capability_evidence(account_id,capability_id,source_type,source_id,outcome) VALUES (?,'sql','LEARNING','verified','PASSED') RETURNING id", Long.class, owner);
         assertThatThrownBy(() -> service.applyEvidence(owner,1,evidence,"80000000-0000-0000-0000-000000000001")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
         assertThat(db.queryForObject("SELECT count(*) FROM resume_evidence_updates WHERE account_id=?", Integer.class, owner)).isZero();
+    }
+    @Test
+    void workerRetriesBlockedUploadAndAppliesEvidenceOnceAfterConversion() {
+        long owner = account("resume-worker-upload");
+        String request = "90000000-0000-0000-0000-000000000001";
+        db.update("INSERT INTO resume_uploads(account_id,request_id,file_name,content_type,sha256,extracted_text,file_bytes) VALUES (?,?::uuid,'original.pdf','application/pdf',?,'original',?)", owner, request, "f".repeat(64), new byte[]{1});
+        db.update("INSERT INTO resume_versions(account_id,version,upload_request_id) VALUES (?,1,?::uuid)", owner, request);
+        db.update("INSERT INTO mentor_main_conversations(account_id,first_resume_version) VALUES (?,1)", owner);
+        long evidence = db.queryForObject("INSERT INTO capability_evidence(account_id,capability_id,source_type,source_id,outcome) VALUES (?,'sql','LEARNING','worker','PASSED') RETURNING id", Long.class, owner);
+        db.update("INSERT INTO resume_evidence_outbox(account_id,evidence_id) VALUES (?,?)", owner, evidence);
+        worker.process();
+        assertThat(db.queryForObject("SELECT count(*) FROM resume_evidence_outbox WHERE account_id=? AND completed_at IS NULL", Integer.class, owner)).isEqualTo(1);
+        assertThat(db.queryForObject("SELECT count(*) FROM mentor_turns WHERE conversation_id=(SELECT id FROM mentor_main_conversations WHERE account_id=?)", Integer.class, owner)).isEqualTo(1);
+        service.convertUpload(owner,1,1,0);
+        db.update("UPDATE resume_evidence_outbox SET next_attempt_at=now() WHERE account_id=?", owner);
+        worker.process(); worker.process();
+        assertThat(db.queryForObject("SELECT count(*) FROM resume_evidence_updates WHERE account_id=?", Integer.class, owner)).isEqualTo(1);
+        assertThat(db.queryForObject("SELECT content::text FROM resume_versions WHERE account_id=? ORDER BY version DESC LIMIT 1", String.class, owner)).contains("SQL", "original");
+        assertThat(db.queryForObject("SELECT file_bytes FROM resume_uploads WHERE account_id=?", byte[].class, owner)).containsExactly(1);
+    }
+    @Test
+    void automaticUpdateWaitsForUnsubmittedDraft() {
+        long owner = account("resume-worker-unsubmitted");
+        try {
+            String content = "{\"profile\":{\"name\":\"Published\",\"email\":\"\",\"phone\":\"\"},\"education\":{\"school\":\"School\",\"major\":\"\",\"degree\":\"\",\"graduation\":\"\"},\"experiences\":[],\"skills\":[]}";
+            db.update("INSERT INTO resume_versions(account_id,version,draft_revision,content) VALUES (?,1,1,?::jsonb)", owner, content);
+            db.update("INSERT INTO resume_drafts(account_id,revision,content) VALUES (?,2,jsonb_set(?::jsonb,'{profile,name}',to_jsonb('Private draft'::text)))", owner, content);
+            db.update("INSERT INTO mentor_main_conversations(account_id,first_resume_version) VALUES (?,1)", owner);
+            long evidence = db.queryForObject("INSERT INTO capability_evidence(account_id,capability_id,source_type,source_id,outcome) VALUES (?,'sql','LEARNING','unsubmitted','PASSED') RETURNING id", Long.class, owner);
+            db.update("INSERT INTO resume_evidence_outbox(account_id,evidence_id) VALUES (?,?)", owner, evidence);
+            worker.process();
+            assertThat(db.queryForObject("SELECT count(*) FROM resume_versions WHERE account_id=?", Integer.class, owner)).isEqualTo(1);
+            assertThat(db.queryForObject("SELECT content::text FROM resume_drafts WHERE account_id=?", String.class, owner)).contains("Private draft");
+            assertThat(db.queryForObject("SELECT completed_at IS NULL FROM resume_evidence_outbox WHERE account_id=?", Boolean.class, owner)).isTrue();
+            assertThat(db.queryForObject("SELECT mentor_reply FROM mentor_turns WHERE conversation_id=(SELECT id FROM mentor_main_conversations WHERE account_id=?)", String.class, owner)).contains("草稿");
+        } finally { db.update("DELETE FROM accounts WHERE id=?", owner); }
+    }
+
+    @Test
+    void workerProcessesMultipleItemsEvenWhenOneIsBlocked() {
+        long blocked = account("resume-worker-batch-blocked"), ready = account("resume-worker-batch-ready");
+        try {
+            String content = "{\"profile\":{\"name\":\"A\",\"email\":\"\",\"phone\":\"\"},\"education\":{\"school\":\"School\",\"major\":\"\",\"degree\":\"\",\"graduation\":\"\"},\"experiences\":[],\"skills\":[]}";
+            db.update("INSERT INTO resume_versions(account_id,version,draft_revision,content) VALUES (?,1,1,?::jsonb)", ready, content);
+            long first = db.queryForObject("INSERT INTO capability_evidence(account_id,capability_id,source_type,source_id,outcome) VALUES (?,'sql','LEARNING','batch-blocked','PASSED') RETURNING id", Long.class, blocked);
+            long second = db.queryForObject("INSERT INTO capability_evidence(account_id,capability_id,source_type,source_id,outcome) VALUES (?,'sql','LEARNING','batch-ready','PASSED') RETURNING id", Long.class, ready);
+            db.update("INSERT INTO resume_evidence_outbox(account_id,evidence_id,next_attempt_at) VALUES (?,?,now()-interval '1 minute'),(?,?,now())", blocked, first, ready, second);
+            worker.process();
+            assertThat(db.queryForObject("SELECT completed_at IS NULL FROM resume_evidence_outbox WHERE account_id=?", Boolean.class, blocked)).isTrue();
+            assertThat(db.queryForObject("SELECT completed_at IS NOT NULL FROM resume_evidence_outbox WHERE account_id=?", Boolean.class, ready)).isTrue();
+        } finally { db.update("DELETE FROM accounts WHERE id IN (?,?)", blocked, ready); }
+    }
+    @Test
+    void firstDraftSaveWaitsForAccountLockHeldByAutomaticUpdate() throws Exception {
+        long owner = account("resume-first-save-lock");
+        var principal = org.mockito.Mockito.mock(com.fieldward.account.AccountPrincipal.class);
+        org.mockito.Mockito.when(principal.accountId()).thenReturn(owner);
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        var started = new java.util.concurrent.CountDownLatch(1);
+        try {
+            java.util.concurrent.Future<?>[] result = new java.util.concurrent.Future<?>[1];
+            transaction.executeWithoutResult(status -> {
+                db.queryForList("SELECT id FROM accounts WHERE id=? FOR NO KEY UPDATE", owner);
+                result[0] = pool.submit(() -> { started.countDown(); return controller.save(principal, new ResumeDraftController.DraftSave(Long.toString(owner), 0L, ResumeDraftContent.empty())); });
+                try {
+                    assertThat(started.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                    assertThatThrownBy(() -> result[0].get(500, java.util.concurrent.TimeUnit.MILLISECONDS)).isInstanceOf(java.util.concurrent.TimeoutException.class);
+                } catch (InterruptedException e) { throw new RuntimeException(e); }
+            });
+            result[0].get(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(db.queryForObject("SELECT count(*) FROM resume_drafts WHERE account_id=?", Integer.class, owner)).isEqualTo(1);
+        } finally { pool.shutdownNow(); db.update("DELETE FROM accounts WHERE id=?", owner); }
     }
     private long account(String name) { return db.queryForObject("INSERT INTO accounts(email,display_name,password_hash,role) VALUES (?,?,'fixture','STUDENT') RETURNING id", Long.class, name+"@test.invalid", name); }
 }

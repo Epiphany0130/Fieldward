@@ -149,6 +149,7 @@ class LearningService {
                 finish(account, claim);
                 var evidence = capabilities.recordEvidence(account, row.capabilityId(), new CapabilityService.EvidenceInput("LEARNING", Long.toString(id), outcome));
                 db.update("UPDATE learning_verifications SET answer=?,outcome=?,feedback=?,evidence_id=? WHERE id=? AND account_id=?", answer, outcome, feedback, evidence.id(), id, account);
+                if ("PASSED".equals(outcome)) db.update("INSERT INTO resume_evidence_outbox(account_id,evidence_id) VALUES (?,?) ON CONFLICT DO NOTHING", account, evidence.id());
                 return new Result(evidence.id(), outcome, feedback);
             });
         } finally { release(account, claim); }

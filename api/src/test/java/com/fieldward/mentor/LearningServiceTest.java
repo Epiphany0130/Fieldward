@@ -45,6 +45,20 @@ class LearningServiceTest extends PostgresIntegrationTest {
 
 
     @Test @Transactional
+    void passingVerificationEnqueuesExactlyOnce() throws Exception {
+        long owner = account("verify-passed-outbox"); conversation(owner);
+        db.update("UPDATE credit_accounts SET balance=1000 WHERE account_id=?", owner);
+        service.openTopic(owner, "sql");
+        org.mockito.Mockito.when(model.available()).thenReturn(true);
+        org.mockito.Mockito.when(model.completeJson(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(json.readTree("{\"question\":\"新问题\"}"), json.readTree("{\"outcome\":\"PASSED\",\"feedback\":\"通过\"}"));
+        var question = service.startVerification(owner, "sql", "passed-request");
+        var result = service.submitVerification(owner, question.id(), "回答");
+        service.submitVerification(owner, question.id(), "回答");
+        assertThat(db.queryForObject("SELECT count(*) FROM resume_evidence_outbox WHERE account_id=? AND evidence_id=?", Integer.class, owner, result.evidenceId())).isEqualTo(1);
+    }
+
+    @Test @Transactional
     void freelyOpensAndReusesAccountScopedTopicWithoutChangingEvidence() {
         long owner = account("learning-owner"), other = account("learning-other");
         conversation(owner); conversation(other);
