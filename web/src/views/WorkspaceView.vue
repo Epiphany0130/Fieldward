@@ -96,6 +96,7 @@ onBeforeUnmount(() => { active = false })
 
 <template>
   <main id="main" tabindex="-1" class="page workspace-page" :aria-busy="loading">
+    <RouterLink to="/workspace/credits">我的积分</RouterLink>
     <p v-if="loading" role="status" class="workspace-feedback">正在打开工作台…</p>
     <div v-else-if="message" class="surface workspace-feedback">
       <p class="notice notice-error" role="alert">{{ message }}</p>

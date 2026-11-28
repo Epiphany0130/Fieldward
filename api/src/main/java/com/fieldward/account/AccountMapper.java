@@ -13,6 +13,7 @@ interface AccountMapper {
     @Select("SELECT " + COLUMNS + " FROM accounts WHERE email = #{email}")
     Account findByEmail(String email);
 
+    @org.apache.ibatis.annotations.Options(flushCache = org.apache.ibatis.annotations.Options.FlushCachePolicy.TRUE)
     @Select("SELECT " + COLUMNS + " FROM accounts WHERE id = #{id}")
     Account findById(long id);
 

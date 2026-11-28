@@ -25,7 +25,8 @@ class DirectionChangeService {
     private String title(String id) { return db.queryForObject("SELECT title FROM career_capabilities WHERE id=?", String.class, id); }
     @Transactional
     public Proposal propose(long account, String direction) {
-        var target = CareerCatalog.require(direction);
+        CareerCatalog.require(direction); // Only directions supported by the legacy assessment can be selected.
+        String description = db.query("SELECT description FROM career_directions WHERE id=?", (rs, row) -> rs.getString(1), direction).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择一个有效的职业方向"));
         lock(account);
         var current = db.query("SELECT a.id,a.direction_id FROM career_targets t JOIN career_assessments a ON a.id=t.assessment_id AND a.account_id=t.account_id WHERE t.account_id=?", (r,n)->new Object[]{r.getLong(1),r.getString(2)}, account).stream().findFirst().orElseThrow(this::missing);
         String from = (String) current[1];
@@ -33,7 +34,7 @@ class DirectionChangeService {
         var old = route(from); var next = route(direction);
         UUID id = UUID.randomUUID();
         db.update("INSERT INTO direction_change_proposals(id,account_id,old_assessment_id,direction_id) VALUES (?,?,?,?)", id, account, current[0], direction);
-        return new Proposal(id, target.description(), next.stream().filter(old::contains).map(this::title).toList(), next.stream().filter(x -> !old.contains(x)).map(this::title).toList(), old.stream().filter(x -> !next.contains(x)).map(this::title).toList(), "共同能力证据会保留；新方向的其他能力需要补充诊断。请确认是否切换。 ");
+        return new Proposal(id, description, next.stream().filter(old::contains).map(this::title).toList(), next.stream().filter(x -> !old.contains(x)).map(this::title).toList(), old.stream().filter(x -> !next.contains(x)).map(this::title).toList(), "共同能力证据会保留；新方向的其他能力需要补充诊断。请确认是否切换。 ");
     }
     @Transactional
     public DirectionView confirmDirectionChange(long account, UUID id) {

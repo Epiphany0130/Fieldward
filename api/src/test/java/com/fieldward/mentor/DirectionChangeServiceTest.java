@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.*;
 class DirectionChangeServiceTest extends PostgresIntegrationTest {
     @Autowired JdbcTemplate db;
     @Autowired DirectionChangeService service;
+    @Autowired CareerPlans plans;
     @Test @Transactional
     void requiresConfirmationAndKeepsSharedEvidencePrivate() {
         long owner = account("direction-owner"), other = account("direction-other");
@@ -35,6 +36,17 @@ class DirectionChangeServiceTest extends PostgresIntegrationTest {
         service.confirmDirectionChange(owner, next.id());
         assertThatThrownBy(() -> service.confirmDirectionChange(owner, proposal.id())).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
         assertThat(db.queryForObject("SELECT count(*) FROM capability_evidence WHERE account_id=? AND capability_id='sql'", Integer.class, owner)).isEqualTo(1);
+    }
+    @Test @Transactional
+    void usesCurrentDirectionDetailsForAssessmentsAndProposals() {
+        long owner = account("direction-details");
+        db.update("INSERT INTO resume_versions(account_id,version,draft_revision,content) VALUES (?,1,1,'{}')", owner);
+        long assessment = db.queryForObject("INSERT INTO career_assessments(account_id,resume_version,direction_id,source_digest,status,attempt) VALUES (?,1,'java-backend',?,'WAITING_TEXT',1) RETURNING id", Long.class, owner, "c".repeat(64));
+        db.update("INSERT INTO career_targets(account_id,assessment_id) VALUES (?,?)", owner, assessment);
+        db.update("UPDATE career_directions SET title='Updated Java' WHERE id='java-backend'");
+        db.update("UPDATE career_directions SET description='Updated data description' WHERE id='data-engineering'");
+        assertThat(plans.archived(owner, assessment).directionTitle()).isEqualTo("Updated Java");
+        assertThat(service.propose(owner, "data-engineering").introduction()).isEqualTo("Updated data description");
     }
     private String current(long account) { return db.queryForObject("SELECT a.direction_id FROM career_targets t JOIN career_assessments a ON a.id=t.assessment_id WHERE t.account_id=?", String.class, account); }
     private long account(String name) { return db.queryForObject("INSERT INTO accounts(email,display_name,password_hash,role) VALUES (?,?, 'fixture','STUDENT') RETURNING id", Long.class, name+"@test.invalid", name); }

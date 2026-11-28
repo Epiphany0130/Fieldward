@@ -15,6 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 class CareerPlans {
     private static final Logger log = LoggerFactory.getLogger(CareerPlans.class);
     private final CareerMapper careers;
+    private final org.springframework.jdbc.core.JdbcTemplate db;
     private final LegacyCareerBackfill legacy;
     private final MentorConversationMapper conversations;
     private final MentorResumeMapper resumes;
@@ -25,7 +26,8 @@ class CareerPlans {
     private final java.util.concurrent.ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
 
     CareerPlans(CareerMapper careers, MentorConversationMapper conversations, MentorResumeMapper resumes,
-                CareerWrites writes, CareerFit fit, MentorModel model, JsonMapper json, LegacyCareerBackfill legacy) {
+                CareerWrites writes, CareerFit fit, MentorModel model, JsonMapper json, LegacyCareerBackfill legacy, org.springframework.jdbc.core.JdbcTemplate db) {
+        this.db = db;
         this.careers = careers;
         this.legacy = legacy;
         this.conversations = conversations;
@@ -38,8 +40,11 @@ class CareerPlans {
 
     State state(long accountId) {
         var workspace = conversations.findWorkspace(accountId);
-        var directions = CareerCatalog.DIRECTIONS.stream().map(direction -> new Option(direction.id(), direction.title(),
-                direction.description(), direction.roles(), direction.skills().stream().limit(3).map(CareerCatalog.Skill::title).toList())).toList();
+        var directions = db.query("SELECT id,title,description,roles FROM career_directions ORDER BY id", (rs, row) -> {
+            String id = rs.getString("id");
+            return new Option(id, rs.getString("title"), rs.getString("description"), rs.getString("roles"),
+                    db.queryForList("SELECT title FROM career_route_items WHERE direction_id=? AND version=(SELECT max(version) FROM career_route_versions WHERE direction_id=?) ORDER BY position LIMIT 3", String.class, id, id));
+        });
         if (workspace == null) {
             return new State(Long.toString(accountId), null, null, false, null, directions, CareerCatalog.SOURCE);
         }
@@ -113,10 +118,10 @@ class CareerPlans {
 
     private Summary summary(CareerMapper.Assessment stored) {
         if (stored == null) return null;
-        var direction = CareerCatalog.require(stored.directionId());
+        String title = db.query("SELECT title FROM career_directions WHERE id=?", (rs, row) -> rs.getString(1), stored.directionId()).stream().findFirst().orElseGet(() -> CareerCatalog.require(stored.directionId()).title());
         var report = stored.report() == null ? null : json.readValue(stored.report(), CareerFit.Report.class);
         if (report != null) report = report.withoutMatch();
-        return new Summary(Long.toString(stored.id()), stored.resumeVersion(), stored.directionId(), direction.title(),
+        return new Summary(Long.toString(stored.id()), stored.resumeVersion(), stored.directionId(), title,
                 stored.status(), report, report != null && !report.usesCurrentAnalysis());
     }
 

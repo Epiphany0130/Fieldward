@@ -1,0 +1,18 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { api, errorMessage } from '../api'
+interface Item { capabilityId: string; title: string; objective: string }
+interface Direction { id: string; version: number; title: string; description: string; roles: string; items: Item[] }
+const capabilities = ref<{ id: string; title: string }[]>([]); const selected = ref<Record<string, string>>({});
+const newId = ref(''); const newTitle = ref('');
+const routes = ref<Direction[]>([]); const message = ref(''); const saving = ref(false)
+onMounted(async () => { try { [routes.value, capabilities.value] = await Promise.all([api<Direction[]>('/admin/routes'), api<{ id: string; title: string }[]>('/admin/routes/capabilities')]) } catch (error) { message.value = errorMessage(error) } })
+async function createCapability() { try { await api('/admin/routes/capabilities', 'POST', { id: newId.value, title: newTitle.value }); capabilities.value = await api<{ id: string; title: string }[]>('/admin/routes/capabilities'); newId.value = ''; newTitle.value = ''; message.value = '能力已创建，可添加到路线。' } catch (error) { message.value = errorMessage(error) } }
+function add(route: Direction) { const capability = capabilities.value.find(item => item.id === selected.value[route.id]); if (capability && !route.items.some(item => item.capabilityId === capability.id)) route.items.push({ capabilityId: capability.id, title: capability.title, objective: '请填写学习目标' }) }
+async function save(route: Direction) { saving.value = true; message.value = ''; try { await api(`/admin/routes/${encodeURIComponent(route.id)}`, 'PUT', route); route.version++; message.value = '保存成功，用户将看到更新后的路线。' } catch (error) { message.value = errorMessage(error) } finally { saving.value = false } }
+</script>
+<template><main id="main" tabindex="-1" class="page"><h1>方向与基础路线</h1><RouterLink to="/admin/users">返回管理中心</RouterLink><p v-if="message" role="status">{{ message }}</p>
+  <form class="surface" @submit.prevent="createCapability"><h2>创建能力模块</h2><label>稳定标识（小写字母、数字、冒号或连字符）<input v-model="newId" required pattern="[a-z][a-z0-9:-]*" maxlength="100"></label><label>名称 <input v-model="newTitle" required maxlength="200"></label><button type="submit">创建</button></form>
+  <form v-for="route in routes" :key="route.id" class="surface" @submit.prevent="save(route)"><label>方向名称 <input v-model="route.title" required maxlength="200"></label><label>描述 <textarea v-model="route.description" required maxlength="1000" /></label><label>相关岗位 <input v-model="route.roles" required maxlength="1000"></label>
+    <h2>能力模块</h2><div v-for="(item, index) in route.items" :key="item.capabilityId"><p>{{ item.capabilityId }}</p><label>名称 <input v-model="item.title" required maxlength="200"></label><label>目标 <textarea v-model="item.objective" required maxlength="1000" /></label><button type="button" :disabled="route.items.length <= 1" @click="route.items.splice(index, 1)">移除模块</button><button type="button" :disabled="index === 0" @click="[route.items[index - 1], route.items[index]] = [route.items[index]!, route.items[index - 1]!]">上移</button></div><label>添加已有能力 <select v-model="selected[route.id]"><option value="">请选择</option><option v-for="capability in capabilities" :key="capability.id" :value="capability.id">{{ capability.title }} ({{ capability.id }})</option></select></label><button type="button" @click="add(route)">添加模块</button><button class="button button-primary" :disabled="saving">保存路线</button></form>
+</main></template>

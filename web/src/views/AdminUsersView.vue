@@ -5,6 +5,7 @@ import { ApiError, api, errorMessage, type Account, type UserPage } from '../api
 import { forgetSession } from '../session'
 
 const router = useRouter()
+const metrics = ref<{ registrations: number; diagnosisSessions: number; learningChats: number; interviewSessions: number; applications: number }>()
 const search = ref('')
 const query = ref('')
 const result = ref<UserPage>()
@@ -91,13 +92,29 @@ async function adjustCredits(user: Account) {
   }
 }
 
-onMounted(() => loadUsers())
+async function resetPassword(user: Account) {
+  const password = window.prompt(`为「${user.displayName}」设置新密码（至少 8 字符）`)
+  if (password === null) return
+  try { await api(`/admin/users/${user.id}/password`, 'POST', { password }); feedback.value = '密码已重置，该账号现有会话已失效。' } catch (error) { await showError(error) }
+}
+async function changeRole(user: Account) {
+  const role = user.role === 'ADMIN' ? 'STUDENT' : 'ADMIN'
+  if (!window.confirm(`将「${user.displayName}」的角色改为${role === 'ADMIN' ? '管理员' : '学生'}？`)) return
+  try { const updated = await api<Account>(`/admin/users/${user.id}/role`, 'PATCH', { role }); const row = result.value?.users.findIndex(x => x.id === user.id) ?? -1; if (row >= 0 && result.value) result.value.users.splice(row, 1, updated); feedback.value = '角色已更新。' } catch (error) { await showError(error) }
+}
+async function deleteUser(user: Account) {
+  if (!window.confirm(`永久删除「${user.displayName}」及其数据？此操作无法撤销。`)) return
+  try { await api(`/admin/users/${user.id}`, 'DELETE'); if (result.value) result.value.users = result.value.users.filter(x => x.id !== user.id); feedback.value = '账号已删除。' } catch (error) { await showError(error) }
+}
+
+onMounted(() => { loadUsers(); api<typeof metrics.value>('/admin/metrics').then(value => { metrics.value = value }).catch(showError) })
 </script>
 
 <template>
   <main id="main" tabindex="-1" class="page">
     <h1>用户管理中心</h1>
-    <RouterLink to="/admin/jobs">岗位管理</RouterLink>
+    <nav><RouterLink to="/admin/jobs">岗位管理</RouterLink> · <RouterLink to="/admin/routes">方向与路线</RouterLink></nav>
+    <section v-if="metrics" class="surface"><h2>使用概况</h2><p>学生账号 {{ metrics.registrations }} · 诊断会话 {{ metrics.diagnosisSessions }} · 学习话题 {{ metrics.learningChats }} · 面试会话 {{ metrics.interviewSessions }} · 投递记录 {{ metrics.applications }}</p><p>统计为当前记录总数；实际服务成本尚待核算。</p></section>
     <section class="surface directory" aria-label="账号列表" :aria-busy="busy">
       <form class="search-form" @submit.prevent="loadUsers(1, search.trim())">
         <label class="field" for="search-users">
@@ -128,6 +145,9 @@ onMounted(() => loadUsers())
             <time :datetime="user.createdAt">{{ formatDate(user.createdAt) }}</time>
             <div class="user-actions">
               <button class="button button-quiet" type="button" :disabled="busy" @click="adjustCredits(user)">调整积分</button>
+              <button class="button button-quiet" type="button" :disabled="busy" @click="resetPassword(user)">重置密码</button>
+              <button class="button button-quiet" type="button" :disabled="busy" @click="changeRole(user)">修改角色</button>
+              <button class="button button-quiet button-caution" type="button" :disabled="busy" @click="deleteUser(user)">删除</button>
               <button
                 v-if="user.role === 'STUDENT'"
                 class="button button-quiet"
