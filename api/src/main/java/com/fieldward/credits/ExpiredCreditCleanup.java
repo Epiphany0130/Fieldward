@@ -34,6 +34,11 @@ public class ExpiredCreditCleanup {
             WHERE account_id=? AND claim_id IS NOT NULL AND lease_until<=now() FOR UPDATE
             """, (rs, n) -> rs.getString(1), accountId);
         db.update("UPDATE career_skill_sessions SET claim_id=NULL, lease_until=NULL WHERE account_id=? AND claim_id IS NOT NULL AND lease_until<=now()", accountId);
+        var learning = db.query("""
+            SELECT claim_id FROM learning_verifications WHERE account_id=? AND claim_id IS NOT NULL AND lease_until<=now() FOR UPDATE
+            """, (rs, n) -> rs.getString(1), accountId);
+        db.update("UPDATE learning_verifications SET claim_id=NULL, lease_until=NULL WHERE account_id=? AND claim_id IS NOT NULL AND lease_until<=now()", accountId);
+        for (var claim : learning) credits.releaseIfPresent("learning:" + claim);
         for (var request : turns) credits.releaseIfPresent(request);
         for (var request : assessments) credits.releaseIfPresent(request);
         for (var claim : claims) credits.releaseIfPresent("skill:" + claim);
