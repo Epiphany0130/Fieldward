@@ -23,6 +23,9 @@ interface MentorTurnMapper {
     String SEARCH = "(setweight(mentor_search_vector(turn.student_message), 'A') || "
             + "setweight(mentor_search_vector(turn.mentor_reply), 'C'))";
 
+    @Select("SELECT account_id FROM mentor_main_conversations WHERE id = #{conversationId}")
+    Long accountForConversation(long conversationId);
+
     @Select("SELECT id FROM mentor_main_conversations WHERE account_id = #{accountId}")
     Long findConversation(long accountId);
 

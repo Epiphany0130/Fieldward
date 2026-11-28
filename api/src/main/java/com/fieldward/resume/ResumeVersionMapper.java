@@ -13,6 +13,9 @@ interface ResumeVersionMapper {
     @Select("SELECT id FROM accounts WHERE id = #{accountId} FOR NO KEY UPDATE")
     Long lockAccount(long accountId);
 
+    @Select("SELECT " + COLUMNS + " FROM resume_versions WHERE account_id = #{accountId} ORDER BY version DESC")
+    java.util.List<Submission> list(long accountId);
+
     @Select("SELECT " + COLUMNS + " FROM resume_versions WHERE account_id = #{accountId} ORDER BY version DESC LIMIT 1")
     Submission latest(long accountId);
 

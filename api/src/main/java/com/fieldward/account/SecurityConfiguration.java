@@ -103,7 +103,7 @@ class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/internal/realtime/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/resume/**", "/api/workspace", "/api/mentor/**", "/api/career/**", "/api/realtime/**", "/api/learning/**", "/api/jobs/**", "/api/jobs").hasRole("STUDENT")
+                        .requestMatchers("/api/resume/**", "/api/workspace", "/api/mentor/**", "/api/career/**", "/api/realtime/**", "/api/learning/**", "/api/jobs/**", "/api/jobs", "/api/applications/**", "/api/applications").hasRole("STUDENT")
                         .anyRequest().authenticated())
                 .build();
     }

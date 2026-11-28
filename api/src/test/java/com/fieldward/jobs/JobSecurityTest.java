@@ -35,10 +35,13 @@ class JobSecurityTest extends PostgresIntegrationTest {
         db.update("INSERT INTO job_versions(job_id,title,requirements,source_url) SELECT id,source_job_id,'requirements','https://example.com/' || source_job_id FROM jobs WHERE source_id='security'");
         var mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(springSecurityFilterChain).build();
         mvc.perform(get("/api/admin/jobs")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/applications")).andExpect(status().isUnauthorized());
         var student = login(mvc, "job-student@test.invalid");
         var admin = login(mvc, "job-admin@test.invalid");
         mvc.perform(get("/api/admin/jobs").session(student)).andExpect(status().isForbidden());
         mvc.perform(get("/api/admin/jobs").session(admin)).andExpect(status().isOk());
+        mvc.perform(get("/api/applications").session(admin)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/applications").session(student)).andExpect(status().isOk());
         mvc.perform(get("/api/jobs").session(student)).andExpect(status().isOk()).andExpect(content().string(org.hamcrest.Matchers.containsString("active"))).andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("removed"))));
     }
     private MockHttpSession login(org.springframework.test.web.servlet.MockMvc mvc, String email) throws Exception {

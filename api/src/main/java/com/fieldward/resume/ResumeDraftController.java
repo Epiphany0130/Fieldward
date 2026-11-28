@@ -104,6 +104,11 @@ class ResumeDraftController {
         return updates.restore(requireAccount(student, input.accountId()), input.version(), input.latestVersion(), input.draftRevision());
     }
 
+    @GetMapping("/versions")
+    java.util.List<ResumeVersionMapper.Submission> versions(@AuthenticationPrincipal AccountPrincipal student) {
+        return versions.list(student.accountId());
+    }
+
     @GetMapping("/final")
     FinalView finalDocument(@AuthenticationPrincipal AccountPrincipal student,
                             @RequestParam(required = false) @Positive Long version) {

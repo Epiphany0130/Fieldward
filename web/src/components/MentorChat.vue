@@ -24,7 +24,7 @@ const nextBefore = ref<string | null>(null)
 const thread = ref<HTMLElement>()
 const compose = ref<HTMLTextAreaElement>()
 const busy = computed(() => Boolean(active.value || aborter.value))
-const canSend = computed(() => ready.value && available.value && !busy.value && !syncing.value && !pending.value && draft.value.trim())
+const canSend = computed(() => ready.value && !busy.value && !syncing.value && !pending.value && draft.value.trim())
 let poll: number | undefined
 let unmounted = false
 
@@ -54,6 +54,7 @@ function schedulePoll() {
 
 function handleError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) emit('expired')
+  else if (error instanceof ApiError && error.status === 503 && !available.value) message.value = '模型未配置，暂时无法处理这条消息。可发送明确的投递进度，或返回编辑。'
   else if (!(error instanceof DOMException && error.name === 'AbortError')) message.value = errorMessage(error)
 }
 
@@ -98,7 +99,7 @@ async function syncHistory(watch = active.value?.requestId, before?: string) {
 }
 
 async function send(input: StudentMessage) {
-  if (busy.value || !ready.value || !available.value || syncing.value) return
+  if (busy.value || !ready.value || syncing.value) return
   message.value = ''
   if (!turns.value.some(({ requestId }) => requestId === input.requestId)) pending.value = input
   currentRequest.value = input.requestId
@@ -222,7 +223,7 @@ onBeforeUnmount(() => {
           </article>
           <div v-else class="turn-feedback">
             <span>这次回复已中断。</span>
-            <button type="button" class="button button-quiet" :disabled="busy || syncing || !available || Boolean(pending)" @click="retry(turn)">重试回复</button>
+            <button type="button" class="button button-quiet" :disabled="busy || syncing || Boolean(pending)" @click="retry(turn)">重试回复</button>
           </div>
         </li>
         <li v-if="pending" class="turn">
@@ -230,7 +231,7 @@ onBeforeUnmount(() => {
             <p>{{ pending.content }}</p>
           </article>
           <div v-if="!aborter" class="turn-feedback">
-            <button type="button" class="button button-quiet" :disabled="busy || syncing || !available" @click="send(pending)">重试发送</button>
+            <button type="button" class="button button-quiet" :disabled="busy || syncing" @click="send(pending)">重试发送</button>
             <button type="button" class="button button-quiet" :disabled="busy" @click="resumeEditing">返回编辑</button>
           </div>
         </li>
@@ -240,12 +241,12 @@ onBeforeUnmount(() => {
       <p class="notice notice-error" role="alert">{{ message }}</p>
       <button v-if="!busy" type="button" class="button button-quiet" @click="reloadHistory">重新加载对话</button>
     </div>
-    <p v-if="ready && !available" class="notice chat-notice setup-notice" role="status">当前环境尚未配置 Mentor 模型，可以查看已有对话。</p>
+    <p v-if="ready && !available" class="notice chat-notice setup-notice" role="status">当前环境尚未配置 Mentor 模型。仍可发送明确的投递进度，例如“我已投递岗位全名”；其他消息暂时无法处理。</p>
     <form v-if="!readOnly" class="composer" @submit.prevent="submit">
       <label class="field">
         <span>给 Mentor 发消息</span>
         <textarea ref="compose" v-model="draft" rows="3" maxlength="4000" @keydown.enter="onEnter"
-                  :disabled="!ready || !available || Boolean(pending)" placeholder="例如：我想准备 Java 后端实习，应该从哪开始？" />
+                  :disabled="!ready || Boolean(pending)" placeholder="例如：我想准备 Java 后端实习，应该从哪开始？" />
       </label>
       <div class="composer-actions">
         <button v-if="!sideId" type="button" class="button button-quiet" :disabled="!ready || !available || busy || syncing || Boolean(pending)"

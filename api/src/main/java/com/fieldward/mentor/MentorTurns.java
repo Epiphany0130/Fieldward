@@ -25,8 +25,10 @@ class MentorTurns {
     private final CareerPlans careers;
     private final SkillSessions skills;
     private final LearningMapper learning;
+    private final com.fieldward.jobs.ApplicationService applications;
 
-    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers, SkillSessions skills, CreditService credits, ExpiredCreditCleanup expiredCredits, LearningMapper learning) {
+    MentorTurns(MentorTurnMapper mapper, MentorMemory memory, CareerPlans careers, SkillSessions skills, CreditService credits, ExpiredCreditCleanup expiredCredits, LearningMapper learning, com.fieldward.jobs.ApplicationService applications) {
+        this.applications = applications;
         this.learning = learning;
         this.expiredCredits = expiredCredits;
         this.credits = credits;
@@ -71,23 +73,36 @@ class MentorTurns {
             }
             if (previous.status() == MentorTurnMapper.Status.COMPLETED) return previous;
         }
-        if (!available) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "当前环境尚未配置 Mentor 模型");
+        boolean applicationMessage = applications.isApplicationMessage(message);
+        if (!available && !applicationMessage) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "当前环境尚未配置 Mentor 模型");
         if (mapper.active(conversation, side) != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Mentor 正在回复，请稍后再试");
         }
         if (previous != null) {
             credits.releaseIfPresent(creditRequest(previous));
             var retry = mapper.retry(previous.id(), LEASE_SECONDS);
-            credits.reserveAi(accountId, creditRequest(retry), "FREE");
+            if (!applicationMessage) credits.reserveAi(accountId, creditRequest(retry), "FREE");
             return retry;
         }
         var turn = mapper.start(conversation, side, requestId, message, LEASE_SECONDS);
-        credits.reserveAi(accountId, creditRequest(turn), "FREE");
+        if (!applicationMessage) credits.reserveAi(accountId, creditRequest(turn), "FREE");
         memory.capture(turn);
         return turn;
     }
 
     private String creditRequest(StoredTurn turn) { return "mentor:" + turn.id() + ":" + turn.attempt(); }
+
+    @Transactional
+    public StoredTurn completeApplicationMessage(StoredTurn turn) {
+        Long account = mapper.accountForConversation(turn.conversationId());
+        if (account == null) return null;
+        String reply = applications.updateFromMessage(account, turn.studentMessage(), "mentor-turn:" + turn.id());
+        if (reply == null) return null;
+        var completed = mapper.complete(turn.id(), turn.attempt(), reply, memory.writeSources(List.of()));
+        if (completed == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "对话已过期");
+        if (turn.sideChatId() != null && reply.startsWith("已更新")) mapper.openLearning(turn.conversationId(), reply, memory.writeSources(List.of()));
+        return completed;
+    }
 
     @Transactional
     public StoredTurn complete(StoredTurn turn, String reply, List<MentorMemory.Source> sources) {
@@ -98,7 +113,7 @@ class MentorTurns {
 
     @Transactional
     public void interrupt(StoredTurn turn) {
-        if (mapper.interrupt(turn.id(), turn.attempt()) == 1) credits.release(creditRequest(turn));
+        if (mapper.interrupt(turn.id(), turn.attempt()) == 1) credits.releaseIfPresent(creditRequest(turn));
     }
 
     Generation context(StoredTurn turn) {

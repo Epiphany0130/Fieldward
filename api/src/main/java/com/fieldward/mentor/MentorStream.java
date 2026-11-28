@@ -86,6 +86,11 @@ class MentorStream {
     private void generate(SseEmitter emitter, StoredTurn turn, AtomicBoolean finished) {
         var reply = new StringBuilder();
         try {
+            var application = turns.completeApplicationMessage(turn);
+            if (application != null) {
+                if (finished.compareAndSet(false, true)) send(emitter, "done", turns.view(application));
+                return;
+            }
             var context = turns.context(turn);
             model.stream(context.messages(), text -> {
                 if (finished.get()) throw new IOException("Client disconnected");
